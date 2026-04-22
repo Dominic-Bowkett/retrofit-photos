@@ -1775,7 +1775,9 @@
       done: document.getElementById("camera-done"),
       cancel: document.getElementById("camera-cancel"),
       switch: document.getElementById("camera-switch"),
+      torch: document.getElementById("camera-torch"),
     },
+    torchOn: false,
   };
 
   async function openCamera(group) {
@@ -1797,11 +1799,59 @@
     }
   }
 
+  function cameraVideoTrack() {
+    if (!camera.stream) return null;
+    const tracks = camera.stream.getVideoTracks();
+    return tracks.length ? tracks[0] : null;
+  }
+
+  function trackSupportsTorch(track) {
+    if (!track || typeof track.getCapabilities !== "function") return false;
+    try {
+      const caps = track.getCapabilities();
+      return !!(caps && caps.torch);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function applyTorch(on) {
+    const track = cameraVideoTrack();
+    if (!track || !trackSupportsTorch(track)) return false;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: !!on }] });
+      return true;
+    } catch (err) {
+      console.warn("applyConstraints torch failed", err);
+      return false;
+    }
+  }
+
+  function refreshTorchButton() {
+    const btn = camera.els.torch;
+    if (!btn) return;
+    const track = cameraVideoTrack();
+    const supported = trackSupportsTorch(track);
+    btn.hidden = !supported;
+    if (!supported) {
+      camera.torchOn = false;
+      btn.setAttribute("aria-pressed", "false");
+      btn.classList.remove("is-on");
+      return;
+    }
+    btn.setAttribute("aria-pressed", String(camera.torchOn));
+    btn.classList.toggle("is-on", camera.torchOn);
+    const label = btn.querySelector(".camera-torch-state");
+    if (label) label.textContent = camera.torchOn ? "Flash on" : "Flash off";
+  }
+
   async function startCameraStream(facingMode) {
     if (camera.stream) {
       camera.stream.getTracks().forEach((t) => t.stop());
       camera.stream = null;
     }
+    // A new stream starts with torch off regardless of the previous state.
+    camera.torchOn = false;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       throw new Error("Camera API not available");
     }
@@ -1821,13 +1871,20 @@
     } catch (_) {
       /* autoplay quirks ignored */
     }
+    // Torch capabilities are only populated after the track is live, which
+    // on some platforms takes a short moment after getUserMedia resolves.
+    refreshTorchButton();
+    setTimeout(refreshTorchButton, 400);
   }
 
   function closeCamera(save) {
     if (camera.stream) {
+      if (camera.torchOn) applyTorch(false).catch(() => {});
       camera.stream.getTracks().forEach((t) => t.stop());
       camera.stream = null;
     }
+    camera.torchOn = false;
+    refreshTorchButton();
     camera.els.video.srcObject = null;
     camera.els.overlay.hidden = true;
     camera.els.overlay.setAttribute("aria-hidden", "true");
@@ -1949,6 +2006,21 @@
       toast("Couldn't switch camera.", "err");
     }
   });
+  if (camera.els.torch) {
+    camera.els.torch.addEventListener("click", async () => {
+      const target = !camera.torchOn;
+      const ok = await applyTorch(target);
+      if (ok) {
+        camera.torchOn = target;
+        refreshTorchButton();
+      } else {
+        toast(
+          "Flash control isn't available on this device — try the system torch.",
+          "err"
+        );
+      }
+    });
+  }
   document.addEventListener("keydown", (e) => {
     if (camera.els.overlay.hidden) return;
     if (e.key === "Escape") {

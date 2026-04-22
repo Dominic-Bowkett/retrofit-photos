@@ -272,7 +272,10 @@
           <button id="camera-shutter" type="button" class="camera-shutter" aria-label="Capture">
             <span class="camera-shutter-inner"></span>
           </button>
-          <span class="camera-hud-btn ghost placeholder" aria-hidden="true"></span>
+          <button id="camera-torch" type="button" class="camera-hud-btn ghost" aria-pressed="false" aria-label="Toggle flash" title="Toggle flash" hidden>
+            <span class="camera-torch-icon" aria-hidden="true">⚡</span>
+            <span class="sr-only camera-torch-state">Flash off</span>
+          </button>
         </div>
       </div>
     </div>

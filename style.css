@@ -862,6 +862,22 @@ input[type="date"]:focus {
   cursor: default;
 }
 
+#camera-torch {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+#camera-torch.is-on {
+  background: #ffcd3a;
+  color: #2a1c00;
+  border-color: #e3b73a;
+  box-shadow: 0 0 14px rgba(255, 205, 58, 0.55);
+}
+
+.camera-torch-icon {
+  display: inline-block;
+}
+
 .camera-thumbs {
   display: flex;
   gap: 6px;
