@@ -1030,3 +1030,289 @@ input[type="date"]:focus {
     padding: 8px 11px;
   }
 }
+
+/* ---------- Rooms ---------- */
+.rooms-card-header {
+  margin-bottom: 12px;
+}
+
+.rooms-card-header h2 {
+  margin: 0 0 4px;
+}
+
+.rooms-card-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.rooms {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.rooms-empty {
+  margin: 0;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px dashed var(--line);
+  background: #f9fbfa;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.add-room-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.add-room-type-wrap select {
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font: inherit;
+  min-width: 160px;
+}
+
+.room {
+  border-left: 4px solid #c7e3d3;
+  transition: border-color 0.15s ease;
+}
+
+.room.room-wet {
+  border-left-color: #66a5d5;
+}
+
+.room.room-nonhab {
+  border-left-color: #d3b070;
+}
+
+.room-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 8px;
+  padding: 2px 0;
+}
+
+.room-header:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.room.collapsed .room-header {
+  margin-bottom: 0;
+}
+
+.room.collapsed .room-body {
+  display: none;
+}
+
+.room.collapsed .group-chevron {
+  transform: rotate(-90deg);
+}
+
+.room-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.room-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  padding: 2px 4px;
+  border-radius: 6px;
+  min-width: 120px;
+}
+
+.room-title:focus {
+  outline: 2px solid var(--accent);
+  background: #f6faf7;
+}
+
+.room-count {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.room-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.room-control select {
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.room-habitability {
+  font-weight: 600;
+}
+
+.room.room-wet .room-habitability {
+  color: #1853a1;
+}
+
+.room.room-nonhab .room-habitability {
+  color: #7a5200;
+}
+
+.room-body {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ---------- Sub-groups inside a room ---------- */
+.subgroup {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fafbfa;
+  padding: 10px 12px;
+}
+
+.subgroup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.subgroup-header:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.subgroup.collapsed .thumbs {
+  display: none;
+}
+
+.subgroup.collapsed .group-chevron {
+  transform: rotate(-90deg);
+}
+
+.subgroup-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.subgroup-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.subgroup-count {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.subgroup-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.subgroup-actions .btn {
+  font-size: 0.82rem;
+  padding: 6px 10px;
+}
+
+.subgroup .thumbs {
+  margin-top: 10px;
+}
+
+/* ---------- Defect toggle on thumb ---------- */
+.thumb-defect {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f4f6f4;
+  color: var(--muted);
+  cursor: pointer;
+  justify-content: center;
+}
+
+.thumb-defect:hover {
+  filter: brightness(0.97);
+}
+
+.thumb-defect-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c4ccc8;
+  display: inline-block;
+}
+
+.thumb-defect[aria-pressed="true"] {
+  background: #fdecec;
+  color: var(--danger);
+  border-color: #f3c1c1;
+}
+
+.thumb-defect[aria-pressed="true"] .thumb-defect-dot {
+  background: var(--danger);
+  box-shadow: 0 0 0 2px rgba(178, 45, 45, 0.18);
+}
+
+.thumb.has-defect {
+  box-shadow: 0 0 0 2px rgba(178, 45, 45, 0.35) inset;
+}
+
+@media (max-width: 520px) {
+  .room-controls {
+    width: 100%;
+  }
+  .room-control {
+    flex: 1 1 45%;
+  }
+  .room-control select {
+    width: 100%;
+  }
+  .add-room-type-wrap {
+    flex: 1 1 auto;
+  }
+  .add-room-type-wrap select {
+    width: 100%;
+    min-width: 0;
+  }
+}
+

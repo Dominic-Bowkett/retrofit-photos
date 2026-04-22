@@ -64,6 +64,21 @@
         </div>
       </section>
 
+      <section class="card rooms-card" aria-label="Rooms">
+        <div class="rooms-card-header">
+          <h2>Rooms</h2>
+          <p class="rooms-card-hint">Add a room for each space you photograph. Each room groups its Room Photos, Undercuts, Windows, Lighting, Heating, Ventilation and Other evidence.</p>
+        </div>
+        <section id="rooms" class="rooms" aria-label="Rooms list"></section>
+        <div class="add-room-row">
+          <label class="add-room-type-wrap">
+            <span class="sr-only">Room type</span>
+            <select id="new-room-type" aria-label="Room type"></select>
+          </label>
+          <button id="btn-add-room" class="btn btn-primary-soft" type="button">+ Add room</button>
+        </div>
+      </section>
+
       <div class="view-toggle" role="tablist" aria-label="Photo layout">
         <button class="view-toggle-btn is-active" data-view="group" role="tab" aria-selected="true" type="button">By group</button>
         <button class="view-toggle-btn" data-view="tag" role="tab" aria-selected="false" type="button">By tag</button>
@@ -133,8 +148,65 @@
             <input type="text" class="thumb-label" placeholder="Label" />
             <button type="button" class="thumb-remove" title="Remove photo" aria-label="Remove photo">&times;</button>
           </div>
+          <button type="button" class="thumb-defect" aria-pressed="false" title="Toggle defect">
+            <span class="thumb-defect-dot" aria-hidden="true"></span>
+            <span class="thumb-defect-label">No defect</span>
+          </button>
         </figcaption>
       </figure>
+    </template>
+
+    <template id="room-template">
+      <article class="card room" data-room-id="">
+        <header class="room-header" role="button" tabindex="0" aria-expanded="true">
+          <div class="room-title-wrap">
+            <span class="group-chevron" aria-hidden="true">▾</span>
+            <h2 class="room-title" contenteditable="true" spellcheck="false"></h2>
+            <span class="room-count">0 photos</span>
+          </div>
+          <div class="room-controls">
+            <label class="room-control">
+              <span class="sr-only">Room type</span>
+              <select class="room-type" aria-label="Room type"></select>
+            </label>
+            <label class="room-control">
+              <span class="sr-only">Habitability</span>
+              <select class="room-habitability" aria-label="Habitability"></select>
+            </label>
+            <button class="btn btn-ghost-dark btn-remove-room" type="button" title="Remove room">Remove</button>
+          </div>
+        </header>
+        <div class="room-body">
+          <div class="room-subgroups"></div>
+        </div>
+      </article>
+    </template>
+
+    <template id="subgroup-template">
+      <section class="subgroup" data-group-id="">
+        <header class="subgroup-header" role="button" tabindex="0" aria-expanded="false">
+          <div class="subgroup-title-wrap">
+            <span class="group-chevron" aria-hidden="true">▾</span>
+            <h3 class="subgroup-title"></h3>
+            <span class="subgroup-count">0 photos</span>
+          </div>
+          <div class="subgroup-actions">
+            <button class="btn btn-primary-soft btn-take-photo" type="button">Take photo</button>
+            <label class="btn btn-upload">
+              <input type="file" class="file-input-upload" accept="image/*" multiple hidden />
+              Upload
+            </label>
+          </div>
+        </header>
+        <div class="thumbs">
+          <button type="button" class="thumb thumb-add btn-take-photo-tile" title="Take another photo">
+            <span class="thumb-add-inner">
+              <span class="thumb-add-plus" aria-hidden="true">+</span>
+              <span class="thumb-add-label">Take photo</span>
+            </span>
+          </button>
+        </div>
+      </section>
     </template>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>

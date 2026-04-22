@@ -26,6 +26,42 @@
 
   const BUILDING_TAGS = ["Main", "Ext1", "Ext2", "Ext3", "Ext4"];
   const DEFAULT_BUILDING = "Main";
+
+  // -------------------- Rooms --------------------
+  // Presets the user picks from when adding a room. "Other" is the free-form
+  // fallback. The chosen preset is remembered on the room so the dropdown in
+  // the header reflects it; the displayed name is editable independently.
+  const ROOM_TYPES = [
+    "Living Room",
+    "Dining Room",
+    "Kitchen",
+    "Utility Room",
+    "Bedroom",
+    "Bathroom",
+    "WC",
+    "Other",
+  ];
+  const DEFAULT_ROOM_TYPE = "Living Room";
+  const HABITABILITY_OPTIONS = ["Habitable", "Non Habitable", "Wet Room"];
+  const DEFAULT_HABITABILITY_BY_TYPE = {
+    "Living Room": "Habitable",
+    "Dining Room": "Habitable",
+    "Kitchen": "Habitable",
+    "Utility Room": "Non Habitable",
+    "Bedroom": "Habitable",
+    "Bathroom": "Wet Room",
+    "WC": "Wet Room",
+    "Other": "Habitable",
+  };
+  const ROOM_SUB_GROUPS = [
+    "Room Photos",
+    "Undercuts",
+    "Windows",
+    "Lighting",
+    "Heating",
+    "Ventilation",
+    "Other",
+  ];
   // Storage / export quality: keep individual exported images at near-original
   // fidelity. Camera captures are re-encoded once when the date/GPS overlay is
   // burned in; uploads keep their original bytes unless they exceed the ceiling.
@@ -147,6 +183,11 @@
   // -------------------- Elements --------------------
   const els = {
     groups: document.getElementById("groups"),
+    rooms: document.getElementById("rooms"),
+    roomTpl: document.getElementById("room-template"),
+    subGroupTpl: document.getElementById("subgroup-template"),
+    newRoomType: document.getElementById("new-room-type"),
+    addRoomBtn: document.getElementById("btn-add-room"),
     groupTpl: document.getElementById("group-template"),
     thumbTpl: document.getElementById("thumb-template"),
     addGroupName: document.getElementById("new-group-name"),
@@ -416,6 +457,7 @@
       takenAt: stampDate.toISOString(),
       gps: state.gps ? { ...state.gps } : null,
       building: DEFAULT_BUILDING,
+      defect: false,
       label: "",
     };
   }
@@ -528,6 +570,7 @@
       uploadedAt: new Date().toISOString(),
       originalName: file.name || "",
       building: DEFAULT_BUILDING,
+      defect: false,
       label: "",
     };
   }
@@ -676,10 +719,141 @@
         date: todayISO(),
       },
       groups: makeDefaultGroups(),
+      rooms: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     return property;
+  }
+
+  function makeRoomSubGroups() {
+    return ROOM_SUB_GROUPS.map((name) => ({
+      id: uid("sg"),
+      name,
+      photoIds: [],
+      protected: true,
+      subgroup: true,
+    }));
+  }
+
+  function makeRoom(roomType) {
+    const type = ROOM_TYPES.includes(roomType) ? roomType : DEFAULT_ROOM_TYPE;
+    return {
+      id: uid("room"),
+      name: type,
+      roomType: type,
+      habitability: DEFAULT_HABITABILITY_BY_TYPE[type] || "Habitable",
+      subGroups: makeRoomSubGroups(),
+    };
+  }
+
+  function migrateRooms(property) {
+    if (!property) return false;
+    let changed = false;
+    if (!Array.isArray(property.rooms)) {
+      property.rooms = [];
+      changed = true;
+    }
+    for (const room of property.rooms) {
+      if (!room.id) {
+        room.id = uid("room");
+        changed = true;
+      }
+      if (!room.name) {
+        room.name = room.roomType || DEFAULT_ROOM_TYPE;
+        changed = true;
+      }
+      if (!ROOM_TYPES.includes(room.roomType)) {
+        room.roomType = DEFAULT_ROOM_TYPE;
+        changed = true;
+      }
+      if (!HABITABILITY_OPTIONS.includes(room.habitability)) {
+        room.habitability =
+          DEFAULT_HABITABILITY_BY_TYPE[room.roomType] || "Habitable";
+        changed = true;
+      }
+      if (!Array.isArray(room.subGroups) || !room.subGroups.length) {
+        room.subGroups = makeRoomSubGroups();
+        changed = true;
+      } else {
+        const byName = new Map();
+        for (const sg of room.subGroups) {
+          if (!sg.id) {
+            sg.id = uid("sg");
+            changed = true;
+          }
+          if (!Array.isArray(sg.photoIds)) {
+            sg.photoIds = [];
+            changed = true;
+          }
+          sg.protected = true;
+          sg.subgroup = true;
+          byName.set((sg.name || "").toLowerCase(), sg);
+        }
+        // Ensure every canonical sub-group exists, in the canonical order.
+        const ordered = [];
+        for (const canonical of ROOM_SUB_GROUPS) {
+          const match = byName.get(canonical.toLowerCase());
+          if (match) {
+            match.name = canonical;
+            ordered.push(match);
+          } else {
+            ordered.push({
+              id: uid("sg"),
+              name: canonical,
+              photoIds: [],
+              protected: true,
+              subgroup: true,
+            });
+            changed = true;
+          }
+        }
+        // Preserve any extra custom sub-groups (shouldn't happen, but stay safe).
+        for (const sg of room.subGroups) {
+          if (!ordered.includes(sg)) ordered.push(sg);
+        }
+        room.subGroups = ordered;
+      }
+    }
+    return changed;
+  }
+
+  function forEachRoomSubGroup(property, fn) {
+    if (!property || !Array.isArray(property.rooms)) return;
+    for (const room of property.rooms) {
+      if (!Array.isArray(room.subGroups)) continue;
+      for (const sg of room.subGroups) fn(room, sg);
+    }
+  }
+
+  function findGroupById(id) {
+    if (!state.property) return null;
+    for (const g of state.property.groups || []) {
+      if (g.id === id) return { group: g, room: null };
+    }
+    for (const room of state.property.rooms || []) {
+      for (const sg of room.subGroups || []) {
+        if (sg.id === id) return { group: sg, room };
+      }
+    }
+    return null;
+  }
+
+  function allPhotoGroups() {
+    // Return every { group, room? } pair that can contain photos — used by
+    // the exports so nothing is missed.
+    const out = [];
+    for (const g of state.property.groups || []) out.push({ group: g, room: null });
+    for (const room of state.property.rooms || []) {
+      for (const sg of room.subGroups || []) out.push({ group: sg, room });
+    }
+    return out;
+  }
+
+  function totalPhotoCount() {
+    let n = 0;
+    for (const { group } of allPhotoGroups()) n += group.photoIds.length;
+    return n;
   }
 
   async function createProperty(name) {
@@ -742,8 +916,11 @@
       }
     }
 
+    if (migrateRooms(state.property)) saveProperty();
+
     initExpandedForProperty();
     renderMeta();
+    renderRooms();
     renderGroups();
     renderPropertySelect();
     updateExportButton();
@@ -815,10 +992,10 @@
 
   function expandGroup(group) {
     state.expanded.add(group.id);
-    const node = els.groups.querySelector(`[data-group-id="${group.id}"]`);
+    const node = document.querySelector(`[data-group-id="${group.id}"]`);
     if (node) {
       node.classList.remove("collapsed");
-      const header = node.querySelector(".group-header");
+      const header = node.querySelector(".group-header, .subgroup-header");
       if (header) header.setAttribute("aria-expanded", "true");
     }
   }
@@ -836,7 +1013,9 @@
 
   function renderByTag() {
     // Bucket every photo by its building tag, tracking the originating group
-    // so the thumb can still show a hint and delete/reorder correctly.
+    // so the thumb can still show a hint and delete/reorder correctly. Room
+    // sub-group photos are included too; their source carries a display name
+    // that prefixes the room for clarity.
     const buckets = new Map();
     for (const t of BUILDING_TAGS) buckets.set(t, []);
     for (const group of state.property.groups) {
@@ -844,6 +1023,20 @@
         const photo = state.photos.get(pid);
         if (!photo) continue;
         buckets.get(photoBuildingOf(photo)).push({ group, photo });
+      }
+    }
+    for (const room of state.property.rooms || []) {
+      for (const sg of room.subGroups || []) {
+        for (const pid of sg.photoIds) {
+          const photo = state.photos.get(pid);
+          if (!photo) continue;
+          const displaySg = {
+            id: sg.id,
+            name: `${room.name} — ${sg.name}`,
+            photoIds: sg.photoIds,
+          };
+          buckets.get(photoBuildingOf(photo)).push({ group: displaySg, photo });
+        }
       }
     }
     for (const tag of BUILDING_TAGS) {
@@ -1012,10 +1205,240 @@
     updateGroupCount(group);
   }
 
+  // -------------------- Rooms rendering --------------------
+  function renderRooms() {
+    if (!els.rooms) return;
+    els.rooms.innerHTML = "";
+    const rooms = (state.property && state.property.rooms) || [];
+    if (!rooms.length) {
+      const empty = document.createElement("p");
+      empty.className = "rooms-empty";
+      empty.textContent = "No rooms yet — pick a room type and tap Add room to get started.";
+      els.rooms.appendChild(empty);
+      return;
+    }
+    for (const room of rooms) renderRoom(room);
+  }
+
+  function expandRoom(room) {
+    state.expanded.add(room.id);
+    const node = document.querySelector(`[data-room-id="${room.id}"]`);
+    if (node) {
+      node.classList.remove("collapsed");
+      const header = node.querySelector(".room-header");
+      if (header) header.setAttribute("aria-expanded", "true");
+    }
+  }
+
+  function toggleRoom(room, node) {
+    const nowExpanded = !state.expanded.has(room.id);
+    if (nowExpanded) state.expanded.add(room.id);
+    else state.expanded.delete(room.id);
+    node.classList.toggle("collapsed", !nowExpanded);
+    const header = node.querySelector(".room-header");
+    if (header) header.setAttribute("aria-expanded", String(nowExpanded));
+  }
+
+  function renderRoom(room) {
+    const node = els.roomTpl.content.firstElementChild.cloneNode(true);
+    node.dataset.roomId = room.id;
+    node.classList.toggle("room-wet", room.habitability === "Wet Room");
+    node.classList.toggle("room-nonhab", room.habitability === "Non Habitable");
+
+    const header = node.querySelector(".room-header");
+    const expanded = state.expanded.has(room.id);
+    if (!expanded) node.classList.add("collapsed");
+    header.setAttribute("aria-expanded", String(expanded));
+    header.addEventListener("click", (e) => {
+      if (e.target.closest("button, input, select, [contenteditable='true']")) return;
+      toggleRoom(room, node);
+    });
+    header.addEventListener("keydown", (e) => {
+      if (e.target !== header) return;
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        toggleRoom(room, node);
+      }
+    });
+
+    const title = node.querySelector(".room-title");
+    title.textContent = room.name;
+    title.addEventListener("blur", () => {
+      const v = title.textContent.trim();
+      room.name = v || room.roomType || "Room";
+      title.textContent = room.name;
+      saveProperty();
+    });
+    title.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        title.blur();
+      }
+    });
+
+    const typeSelect = node.querySelector(".room-type");
+    for (const t of ROOM_TYPES) {
+      const opt = document.createElement("option");
+      opt.value = t;
+      opt.textContent = t;
+      typeSelect.appendChild(opt);
+    }
+    typeSelect.value = ROOM_TYPES.includes(room.roomType) ? room.roomType : DEFAULT_ROOM_TYPE;
+    typeSelect.addEventListener("change", () => {
+      const prev = room.roomType;
+      room.roomType = typeSelect.value;
+      // If the visible name matches the old type (user hadn't customised it),
+      // track the new type so the label stays useful.
+      if (!room.name || room.name === prev) {
+        room.name = room.roomType;
+        title.textContent = room.name;
+      }
+      saveProperty();
+    });
+
+    const habSelect = node.querySelector(".room-habitability");
+    for (const h of HABITABILITY_OPTIONS) {
+      const opt = document.createElement("option");
+      opt.value = h;
+      opt.textContent = h;
+      habSelect.appendChild(opt);
+    }
+    habSelect.value = HABITABILITY_OPTIONS.includes(room.habitability)
+      ? room.habitability
+      : "Habitable";
+    habSelect.addEventListener("change", () => {
+      room.habitability = habSelect.value;
+      node.classList.toggle("room-wet", room.habitability === "Wet Room");
+      node.classList.toggle("room-nonhab", room.habitability === "Non Habitable");
+      saveProperty();
+    });
+
+    const removeBtn = node.querySelector(".btn-remove-room");
+    removeBtn.addEventListener("click", () => removeRoom(room.id));
+
+    els.rooms.appendChild(node);
+
+    const subsContainer = node.querySelector(".room-subgroups");
+    for (const sg of room.subGroups) renderSubGroup(room, sg, subsContainer);
+    updateRoomCount(room);
+  }
+
+  function toggleSubGroup(sg, node) {
+    const nowExpanded = !state.expanded.has(sg.id);
+    if (nowExpanded) state.expanded.add(sg.id);
+    else state.expanded.delete(sg.id);
+    node.classList.toggle("collapsed", !nowExpanded);
+    const header = node.querySelector(".subgroup-header");
+    if (header) header.setAttribute("aria-expanded", String(nowExpanded));
+  }
+
+  function renderSubGroup(room, sg, container) {
+    const node = els.subGroupTpl.content.firstElementChild.cloneNode(true);
+    node.dataset.groupId = sg.id;
+
+    const header = node.querySelector(".subgroup-header");
+    const expanded = state.expanded.has(sg.id);
+    if (!expanded) node.classList.add("collapsed");
+    header.setAttribute("aria-expanded", String(expanded));
+    header.addEventListener("click", (e) => {
+      if (e.target.closest("button, input, select, label.btn-upload")) return;
+      toggleSubGroup(sg, node);
+    });
+    header.addEventListener("keydown", (e) => {
+      if (e.target !== header) return;
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        toggleSubGroup(sg, node);
+      }
+    });
+
+    node.querySelector(".subgroup-title").textContent = sg.name;
+
+    node.querySelectorAll(".btn-take-photo, .btn-take-photo-tile").forEach((btn) => {
+      btn.addEventListener("click", () => openCamera(sg));
+    });
+
+    const uploadInput = node.querySelector(".file-input-upload");
+    if (uploadInput) {
+      uploadInput.addEventListener("change", async (e) => {
+        const files = Array.from(e.target.files || []);
+        uploadInput.value = "";
+        if (files.length) await addUploadedPhotos(sg, files);
+      });
+    }
+
+    container.appendChild(node);
+    for (const id of sg.photoIds) {
+      const photo = state.photos.get(id);
+      if (photo) renderThumb(sg, photo);
+    }
+    updateGroupCount(sg);
+  }
+
+  function addRoomFromPreset(type) {
+    const room = makeRoom(type);
+    // Auto-number duplicates so names stay distinct (e.g. "Bedroom 2").
+    const existingSame = (state.property.rooms || []).filter(
+      (r) => r.roomType === room.roomType
+    ).length;
+    if (existingSame > 0) room.name = `${room.roomType} ${existingSame + 1}`;
+    if (!Array.isArray(state.property.rooms)) state.property.rooms = [];
+    state.property.rooms.push(room);
+    state.expanded.add(room.id);
+    renderRooms();
+    updateExportButton();
+    saveProperty();
+    const el = document.querySelector(`[data-room-id="${room.id}"]`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function removeRoom(roomId) {
+    if (!state.property || !Array.isArray(state.property.rooms)) return;
+    const idx = state.property.rooms.findIndex((r) => r.id === roomId);
+    if (idx === -1) return;
+    const room = state.property.rooms[idx];
+    const count = (room.subGroups || []).reduce(
+      (n, sg) => n + sg.photoIds.length,
+      0
+    );
+    const label = room.name || room.roomType || "Room";
+    if (!confirm(
+      `Remove the "${label}" room${count ? ` and its ${count} photo${count === 1 ? "" : "s"}` : ""}? This can't be undone.`
+    )) return;
+    (async () => {
+      for (const sg of room.subGroups || []) {
+        for (const pid of sg.photoIds) {
+          state.photos.delete(pid);
+          try {
+            await IDB.deletePhoto(pid);
+          } catch (err) {
+            console.error(err);
+          }
+        }
+      }
+      state.property.rooms.splice(idx, 1);
+      renderRooms();
+      updateExportButton();
+      saveProperty();
+    })();
+  }
+
   function updateGroupCount(group) {
-    const node = els.groups.querySelector(`[data-group-id="${group.id}"] .group-count`);
+    const node = document.querySelector(
+      `[data-group-id="${group.id}"] .group-count, [data-group-id="${group.id}"] .subgroup-count`
+    );
     if (!node) return;
     const n = group.photoIds.length;
+    node.textContent = `${n} photo${n === 1 ? "" : "s"}`;
+  }
+
+  function updateRoomCount(room) {
+    const node = document.querySelector(
+      `[data-room-id="${room.id}"] .room-count`
+    );
+    if (!node) return;
+    let n = 0;
+    for (const sg of room.subGroups || []) n += sg.photoIds.length;
     node.textContent = `${n} photo${n === 1 ? "" : "s"}`;
   }
 
@@ -1024,7 +1447,7 @@
     const containerId = options.containerGroupId || group.id;
     const thumbsEl =
       options.thumbsEl ||
-      els.groups.querySelector(`[data-group-id="${containerId}"] .thumbs`);
+      document.querySelector(`[data-group-id="${containerId}"] .thumbs`);
     if (!thumbsEl) return;
     const node = els.thumbTpl.content.firstElementChild.cloneNode(true);
     node.dataset.photoId = photo.id;
@@ -1066,6 +1489,24 @@
       });
     }
 
+    const defectBtn = node.querySelector(".thumb-defect");
+    if (defectBtn) {
+      const applyDefectUi = () => {
+        const on = !!photo.defect;
+        node.classList.toggle("has-defect", on);
+        defectBtn.setAttribute("aria-pressed", String(on));
+        const label = defectBtn.querySelector(".thumb-defect-label");
+        if (label) label.textContent = on ? "Defect" : "No defect";
+      };
+      applyDefectUi();
+      defectBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        photo.defect = !photo.defect;
+        applyDefectUi();
+        savePhotoNow(photo).catch((err) => console.warn("Failed to save defect flag", err));
+      });
+    }
+
     node.querySelector(".thumb-remove").addEventListener("click", async () => {
       const label = photo.label || `photo ${group.photoIds.indexOf(photo.id) + 1}`;
       if (!confirm(`Delete "${label}" from ${group.name}? This can't be undone.`)) return;
@@ -1074,6 +1515,8 @@
       state.photos.delete(photo.id);
       node.remove();
       updateGroupCount(group);
+      const owner = findGroupById(group.id);
+      if (owner && owner.room) updateRoomCount(owner.room);
       updateExportButton();
       try {
         await IDB.deletePhoto(photo.id);
@@ -1123,6 +1566,8 @@
 
     // Make sure the receiving group is visible so the new thumbs appear.
     expandGroup(group);
+    const owner = findGroupById(group.id);
+    if (owner && owner.room) expandRoom(owner.room);
 
     let missingExifCount = 0;
     for (const file of imageFiles) {
@@ -1141,6 +1586,7 @@
         toast(`Failed to process ${file.name}`, "err");
       }
     }
+    if (owner && owner.room) updateRoomCount(owner.room);
     updateExportButton();
     saveProperty();
     if (missingExifCount) {
@@ -1188,7 +1634,7 @@
   }
 
   function updateExportButton() {
-    const disabled = !state.property || !state.property.groups.some((g) => g.photoIds.length > 0);
+    const disabled = !state.property || totalPhotoCount() === 0;
     els.exportBtn.disabled = disabled;
     els.exportPhotosBtn.disabled = disabled;
   }
@@ -1376,6 +1822,7 @@
       takenAt: stampDate.toISOString(),
       gps: state.gps ? { ...state.gps } : null,
       building: DEFAULT_BUILDING,
+      defect: false,
       label: "",
     };
     camera.buffer.push(photo);
@@ -1415,6 +1862,8 @@
   async function commitBufferedPhotos(group, photos) {
     // Auto-expand the group so newly-captured thumbs are immediately visible.
     expandGroup(group);
+    const owner = findGroupById(group.id);
+    if (owner && owner.room) expandRoom(owner.room);
     for (const photo of photos) {
       photo.propertyId = state.property.id;
       photo.label = `${group.name} — ${group.photoIds.length + 1}`;
@@ -1428,6 +1877,7 @@
       renderThumb(group, photo);
       updateGroupCount(group);
     }
+    if (owner && owner.room) updateRoomCount(owner.room);
     updateExportButton();
     saveProperty();
     toast(`Added ${photos.length} photo${photos.length === 1 ? "" : "s"} to ${group.name}.`);
@@ -1568,6 +2018,12 @@
     // tag that actually has photos. Each entry in the section carries the
     // source photo plus (in tag mode) a subtitle pointing back at the
     // original group, e.g. "1. Walls — Rear elevation".
+    //
+    // Rooms become additional virtual sections: one per room, whose entries
+    // are the photos from its sub-groups. The existing virtual-section
+    // renderer already emits a sub-heading whenever the source group
+    // changes, so a room's sub-groups (Room Photos, Undercuts, …) appear as
+    // clusters under the room title.
     let groupsWithPhotos;
     if (layout === "tag") {
       const buckets = new Map();
@@ -1577,6 +2033,21 @@
           const photo = state.photos.get(pid);
           if (!photo) continue;
           buckets.get(photoBuildingOf(photo)).push({ photo, source: g });
+        }
+      }
+      for (const room of state.property.rooms || []) {
+        for (const sg of room.subGroups || []) {
+          for (const pid of sg.photoIds) {
+            const photo = state.photos.get(pid);
+            if (!photo) continue;
+            buckets.get(photoBuildingOf(photo)).push({
+              photo,
+              source: {
+                id: sg.id,
+                name: `${room.name} — ${sg.name}`,
+              },
+            });
+          }
         }
       }
       groupsWithPhotos = [];
@@ -1593,6 +2064,24 @@
       }
     } else {
       groupsWithPhotos = state.property.groups.filter((g) => g.photoIds.length > 0);
+      for (const room of state.property.rooms || []) {
+        const entries = [];
+        for (const sg of room.subGroups || []) {
+          for (const pid of sg.photoIds) {
+            const photo = state.photos.get(pid);
+            if (photo) entries.push({ photo, source: sg });
+          }
+        }
+        if (!entries.length) continue;
+        groupsWithPhotos.push({
+          id: `room-${room.id}`,
+          name: `${room.name} (${room.habitability})`,
+          photoIds: entries.map((e) => e.photo.id),
+          virtual: true,
+          entries,
+          room,
+        });
+      }
     }
 
     // Cover page (page 1)
@@ -1738,7 +2227,8 @@
             : building !== DEFAULT_BUILDING
               ? `[${building}] `
               : "";
-        const labelText = `${index}. ${prefix}${photo.label || sourceGroup.name}`;
+        const defectTag = photo.defect ? "[DEFECT] " : "";
+        const labelText = `${index}. ${prefix}${defectTag}${photo.label || sourceGroup.name}`;
         // Captions: single line for camera captures, a 3-line stack for
         // uploaded photos so Captured / Location / Uploaded each get their own line.
         const capH = isUpload ? 58 : 16;
@@ -1787,10 +2277,13 @@
           continue;
         }
 
-        doc.setFont("helvetica", "normal");
+        doc.setFont("helvetica", photo.defect ? "bold" : "normal");
         doc.setFontSize(10);
-        doc.setTextColor(40);
+        if (photo.defect) doc.setTextColor(178, 45, 45);
+        else doc.setTextColor(40);
         doc.text(labelText, margin, cursorY + drawH + 14);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(40);
 
         if (isUpload) {
           doc.setFontSize(9);
@@ -1960,10 +2453,10 @@
   // -------------------- Export photos (share or photos-only ZIP) --------------------
   function photoExportItems() {
     const items = [];
-    for (const g of state.property.groups) {
-      if (!g.photoIds.length) continue;
+    const addFrom = (group, opts) => {
+      if (!group.photoIds.length) return;
       let index = 0;
-      for (const pid of g.photoIds) {
+      for (const pid of group.photoIds) {
         const photo = state.photos.get(pid);
         if (!photo) continue;
         index += 1;
@@ -1971,8 +2464,19 @@
           photo.source === "upload" ? photo.dataUrl : buildExifDataUrl(photo);
         const bytes = dataUrlToBytes(dataUrl);
         const stamp = photo.takenAt || photo.uploadedAt || new Date().toISOString();
-        items.push({ photo, group: g, index, bytes, stamp });
+        items.push({
+          photo,
+          group,
+          index,
+          bytes,
+          stamp,
+          room: (opts && opts.room) || null,
+        });
       }
+    };
+    for (const g of state.property.groups) addFrom(g, {});
+    for (const room of state.property.rooms || []) {
+      for (const sg of room.subGroups || []) addFrom(sg, { room });
     }
     return items;
   }
@@ -2079,9 +2583,10 @@
     const meta = state.property.meta || {};
     const fmtIso = (iso) => (iso ? new Date(iso).toLocaleString() : "not in photo metadata");
 
-    // Build sections list. For layout == "group" each real group is a section.
-    // For layout == "tag" each non-empty building tag is a section whose
-    // photo entries carry their source group for the sub-title.
+    // Build sections list. For layout == "group" each real group is a
+    // section, followed by one section per non-empty room. For layout ==
+    // "tag" each non-empty building tag is a section whose photo entries
+    // carry their source group for the sub-title.
     let sections;
     if (layout === "tag") {
       const buckets = new Map();
@@ -2091,6 +2596,21 @@
           const photo = state.photos.get(pid);
           if (!photo) continue;
           buckets.get(photoBuildingOf(photo)).push({ photo, source: g });
+        }
+      }
+      for (const room of state.property.rooms || []) {
+        for (const sg of room.subGroups || []) {
+          for (const pid of sg.photoIds) {
+            const photo = state.photos.get(pid);
+            if (!photo) continue;
+            buckets.get(photoBuildingOf(photo)).push({
+              photo,
+              source: {
+                id: sg.id,
+                name: `${room.name} — ${sg.name}`,
+              },
+            });
+          }
         }
       }
       sections = [];
@@ -2116,6 +2636,22 @@
             })
             .filter(Boolean),
         }));
+      for (const room of state.property.rooms || []) {
+        const entries = [];
+        for (const sg of room.subGroups || []) {
+          for (const pid of sg.photoIds) {
+            const photo = state.photos.get(pid);
+            if (photo) entries.push({ photo, source: sg });
+          }
+        }
+        if (!entries.length) continue;
+        sections.push({
+          id: `room-${room.id}`,
+          name: `${room.name} (${room.habitability})`,
+          entries,
+          clustered: true,
+        });
+      }
     }
 
     // Contents list.
@@ -2136,9 +2672,11 @@
       const label = `${index}. ${photo.label || source.name}`;
       const labelEsc = escapeHtml(label);
       const tagClass = building === DEFAULT_BUILDING ? "tag tag-main" : "tag tag-ext";
-      let html = `<figure>`;
+      const defectClass = photo.defect ? " has-defect" : "";
+      const defectBadge = photo.defect ? `<span class="tag tag-defect">Defect</span> ` : "";
+      let html = `<figure class="fig${defectClass}">`;
       html += `<a href="${hrefEsc}" target="_blank" rel="noopener"><img src="${hrefEsc}" alt="${labelEsc}" loading="lazy"></a>`;
-      html += `<figcaption><div class="label"><span class="${tagClass}">${escapeHtml(building)}</span> ${labelEsc}</div>`;
+      html += `<figcaption><div class="label">${defectBadge}<span class="${tagClass}">${escapeHtml(building)}</span> ${labelEsc}</div>`;
       if (photo.source === "upload") {
         html += `<div class="meta-line">Date taken: ${escapeHtml(fmtIso(photo.takenAt))}</div>`;
         html += `<div class="meta-line">Location taken: ${escapeHtml(photo.gps ? formatGps(photo.gps) : "not in photo metadata")}</div>`;
@@ -2158,8 +2696,9 @@
     let sectionsHtml = "";
     for (const s of sections) {
       sectionsHtml += `<section id="g-${escapeHtml(s.id)}" class="group"><h2>${escapeHtml(s.name)}</h2>`;
-      if (layout === "tag") {
-        // Cluster the tag's photos by their source group so the reader still
+      const useClusters = layout === "tag" || s.clustered;
+      if (useClusters) {
+        // Cluster the section's photos by their source group so the reader still
         // sees a group heading above each cluster of photos.
         const byGroup = new Map();
         const order = [];
@@ -2233,6 +2772,9 @@ figcaption{padding:10px 12px;font-size:0.88rem}
 .tag{display:inline-block;font-size:0.7rem;font-weight:700;padding:1px 6px;border-radius:999px;margin-right:6px;vertical-align:middle;letter-spacing:0.3px}
 .tag-main{background:#eef5ef;color:#0b3d2e}
 .tag-ext{background:#fff2d6;color:#7a5200}
+.tag-defect{background:#fdecec;color:#b22d2d;border:1px solid #f3c1c1}
+figure.has-defect{border-color:#f3c1c1;box-shadow:0 0 0 1px #f3c1c1 inset}
+figure.has-defect .label{color:#b22d2d}
 .meta-line{color:#5b6b65;font-size:0.82rem;margin:2px 0}
 .open-link{display:inline-block;margin-top:6px;color:#1652b2;text-decoration:underline;font-size:0.82rem}
 `;
@@ -2282,21 +2824,33 @@ ${switchHtml}
 
       // First pass: drop every photo into its folder and record the
       // archive-relative path so the PDF and HTML index can link back to it.
+      // Flat groups live at the top level; room sub-groups get nested under
+      // rooms/<room-slug>/<subgroup>/ so the archive mirrors the UI.
       const dirForGroup = new Map(); // group.id -> dir
       const dirTaken = new Map(); // dir -> count
       const photoPaths = new Map(); // photo.id -> "dir/name.jpg"
-      for (const { photo, group, index, bytes, stamp } of items) {
+      const uniqueDir = (base) => {
+        let dir = base;
+        const n = (dirTaken.get(dir) || 0) + 1;
+        dirTaken.set(dir, n);
+        if (n > 1) dir = `${dir}-${n}`;
+        return dir;
+      };
+      for (const { photo, group, index, bytes, stamp, room } of items) {
         let dir = dirForGroup.get(group.id);
         if (!dir) {
-          dir = slugify(group.name);
-          const n = (dirTaken.get(dir) || 0) + 1;
-          dirTaken.set(dir, n);
-          if (n > 1) dir = `${dir}-${n}`;
+          if (room) {
+            const roomSlug = slugify(`${room.name || room.roomType} ${room.habitability}`);
+            dir = uniqueDir(`rooms/${roomSlug}/${slugify(group.name)}`);
+          } else {
+            dir = uniqueDir(slugify(group.name));
+          }
           dirForGroup.set(group.id, dir);
         }
         const folder = zip.folder(dir);
+        const defectPrefix = photo.defect ? "DEFECT_" : "";
         const labelSlug = slugify(photo.label || `${group.name}-${index}`);
-        const name = `${String(index).padStart(2, "0")}_${labelSlug}.jpg`;
+        const name = `${defectPrefix}${String(index).padStart(2, "0")}_${labelSlug}.jpg`;
         folder.file(name, bytes, { date: new Date(stamp) });
         photoPaths.set(photo.id, `${dir}/${name}`);
       }
@@ -2398,6 +2952,29 @@ ${switchHtml}
   els.addGroupName.addEventListener("keydown", (e) => {
     if (e.key === "Enter") els.addGroupBtn.click();
   });
+
+  // Populate the "Add room" type selector once at boot.
+  if (els.newRoomType) {
+    for (const t of ROOM_TYPES) {
+      const opt = document.createElement("option");
+      opt.value = t;
+      opt.textContent = t;
+      els.newRoomType.appendChild(opt);
+    }
+    els.newRoomType.value = DEFAULT_ROOM_TYPE;
+  }
+  if (els.addRoomBtn) {
+    els.addRoomBtn.addEventListener("click", () => {
+      if (!state.property) return;
+      const type = (els.newRoomType && els.newRoomType.value) || DEFAULT_ROOM_TYPE;
+      try {
+        addRoomFromPreset(type);
+      } catch (err) {
+        console.error(err);
+        toast("Couldn't add room.", "err");
+      }
+    });
+  }
 
   for (const btn of els.viewToggleBtns) {
     btn.addEventListener("click", () => setView(btn.dataset.view));
@@ -2532,6 +3109,7 @@ ${switchHtml}
       state.currentId = state.property.id;
       initExpandedForProperty();
       renderMeta();
+      renderRooms();
       renderGroups();
       renderPropertySelect();
     }
