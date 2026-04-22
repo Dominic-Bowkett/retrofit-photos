@@ -9,20 +9,26 @@
 
   const DEFAULT_GROUPS = [
     { name: "External Elevations" },
-    { name: "Meters" },
-    { name: "Windows" },
-    { name: "Doors" },
-    { name: "Conservatory" },
-    { name: "Renewables" },
-    { name: "Mains Heating" },
-    { name: "Secondary Heating" },
-    { name: "Water Heating" },
-    { name: "Ventilation" },
-    { name: "Lighting" },
-    { name: "Walls" },
     { name: "Loft" },
-    { name: "Floor" },
   ];
+
+  // Legacy default-group names that used to exist but have been collapsed
+  // into photo tags. On load we move their photos into External Elevations
+  // and stamp each photo with the mapped tag so the information survives.
+  const LEGACY_GROUP_TO_TAG = {
+    "meters": "Meters",
+    "windows": "Windows",
+    "doors": "Other",
+    "conservatory": "Other",
+    "renewables": "Other",
+    "mains heating": "Heating",
+    "secondary heating": "Heating",
+    "water heating": "Heating",
+    "ventilation": "Ventilation",
+    "lighting": "Lighting",
+    "walls": "Other",
+    "floor": "Other",
+  };
 
   const BUILDING_TAGS = ["Main", "Ext1", "Ext2", "Ext3", "Ext4"];
   const DEFAULT_BUILDING = "Main";
@@ -57,12 +63,13 @@
   // sub-group layout — a room has a single photos area, and each photo
   // can carry one of these tags (or none).
   const ROOM_TAGS = [
-    "Room Photos",
+    "Room",
     "Undercuts",
     "Windows",
     "Lighting",
     "Heating",
     "Ventilation",
+    "Meters",
     "Other",
   ];
   const NO_ROOM_TAG = "";
@@ -193,8 +200,8 @@
     addRoomBtn: document.getElementById("btn-add-room"),
     groupTpl: document.getElementById("group-template"),
     thumbTpl: document.getElementById("thumb-template"),
-    addGroupName: document.getElementById("new-group-name"),
-    addGroupBtn: document.getElementById("btn-add-group"),
+    addGroupName: null,
+    addGroupBtn: null,
     gpsBtn: document.getElementById("btn-enable-gps"),
     gpsDot: document.getElementById("gps-dot"),
     gpsLabel: document.getElementById("gps-label"),
@@ -682,7 +689,7 @@
       changed = true;
     }
 
-    // Add any missing flat default groups.
+    // Add any missing flat default groups (External Elevations, Loft).
     const existingNames = new Set(
       property.groups.map((g) => (g.name || "").trim().toLowerCase())
     );
@@ -698,6 +705,35 @@
       }
     }
 
+    // Fold photos from the retired default groups (Meters, Windows, Doors,
+    // etc.) into External Elevations, stamping each photo with the mapped
+    // roomTag. Empty legacy groups are then removed outright; user-renamed
+    // / custom groups are untouched.
+    const extElev = property.groups.find(
+      (g) => (g.name || "").trim().toLowerCase() === "external elevations"
+    );
+    const survivingGroups = [];
+    for (const group of property.groups) {
+      const norm = (group.name || "").trim().toLowerCase();
+      const mappedTag = LEGACY_GROUP_TO_TAG[norm];
+      if (mappedTag && group.protected && extElev && group !== extElev) {
+        for (const pid of group.photoIds || []) {
+          const photo = photosMap && photosMap.get(pid);
+          if (photo && photo.roomTag !== mappedTag) {
+            photo.roomTag = mappedTag;
+            if (photo.propertyId === property.id) dirtyPhotoIds.push(pid);
+          }
+          if (!extElev.photoIds.includes(pid)) extElev.photoIds.push(pid);
+        }
+        changed = true;
+        continue; // drop the legacy group
+      }
+      survivingGroups.push(group);
+    }
+    if (survivingGroups.length !== property.groups.length) {
+      property.groups = survivingGroups;
+    }
+
     // Apply the protected flag to any group that matches a default name.
     const flatDefaultNames = new Set(DEFAULT_GROUPS.map((g) => g.name.toLowerCase()));
     for (const group of property.groups) {
@@ -707,6 +743,29 @@
         group.protected = true;
         changed = true;
       }
+    }
+
+    // Reorder so External Elevations is first, Loft second, and everything
+    // else keeps its relative order after the two protected defaults.
+    const orderKey = (g) => {
+      const n = (g.name || "").trim().toLowerCase();
+      if (n === "external elevations") return 0;
+      if (n === "loft") return 1;
+      return 2;
+    };
+    const sortedGroups = property.groups
+      .map((g, i) => ({ g, i }))
+      .sort((a, b) => {
+        const ka = orderKey(a.g);
+        const kb = orderKey(b.g);
+        if (ka !== kb) return ka - kb;
+        return a.i - b.i;
+      })
+      .map((o) => o.g);
+    const sameOrder = sortedGroups.every((g, i) => g === property.groups[i]);
+    if (!sameOrder) {
+      property.groups = sortedGroups;
+      changed = true;
     }
 
     return { changed, dirtyPhotoIds };
@@ -770,10 +829,15 @@
       }
       // Flatten the legacy sub-group layout into a single photos list,
       // stamping each photo with its former sub-group as a roomTag.
+      const renameLegacyTag = (name) => {
+        if (!name) return NO_ROOM_TAG;
+        if (name === "Room Photos") return "Room";
+        return ROOM_TAGS.includes(name) ? name : NO_ROOM_TAG;
+      };
       if (Array.isArray(room.subGroups) && room.subGroups.length) {
         const merged = Array.isArray(room.photoIds) ? room.photoIds.slice() : [];
         for (const sg of room.subGroups) {
-          const tag = ROOM_TAGS.includes(sg.name) ? sg.name : NO_ROOM_TAG;
+          const tag = renameLegacyTag(sg.name);
           for (const pid of sg.photoIds || []) {
             if (!merged.includes(pid)) merged.push(pid);
             if (photosMap) {
@@ -792,6 +856,17 @@
       if (!Array.isArray(room.photoIds)) {
         room.photoIds = [];
         changed = true;
+      }
+      // Catch photos that got the old "Room Photos" tag before this migration.
+      if (photosMap) {
+        for (const pid of room.photoIds) {
+          const photo = photosMap.get(pid);
+          if (photo && photo.roomTag === "Room Photos") {
+            photo.roomTag = "Room";
+            if (photo.propertyId === property.id) dirtyPhotoIds.push(pid);
+            changed = true;
+          }
+        }
       }
     }
     return { changed, dirtyPhotoIds };
@@ -1445,26 +1520,22 @@
 
     const roomTagSelect = node.querySelector(".thumb-roomtag");
     if (roomTagSelect) {
-      if (options.isRoomPhoto) {
-        for (const tag of ROOM_TAGS) {
-          const opt = document.createElement("option");
-          opt.value = tag;
-          opt.textContent = tag;
-          roomTagSelect.appendChild(opt);
-        }
-        const current = ROOM_TAGS.includes(photo.roomTag) ? photo.roomTag : NO_ROOM_TAG;
-        roomTagSelect.value = current;
-        if ((photo.roomTag || NO_ROOM_TAG) !== current) {
-          photo.roomTag = current;
-        }
-        roomTagSelect.hidden = false;
-        roomTagSelect.addEventListener("change", () => {
-          photo.roomTag = roomTagSelect.value;
-          savePhotoNow(photo).catch((err) => console.warn("Failed to save room tag", err));
-        });
-      } else {
-        roomTagSelect.remove();
+      for (const tag of ROOM_TAGS) {
+        const opt = document.createElement("option");
+        opt.value = tag;
+        opt.textContent = tag;
+        roomTagSelect.appendChild(opt);
       }
+      const current = ROOM_TAGS.includes(photo.roomTag) ? photo.roomTag : NO_ROOM_TAG;
+      roomTagSelect.value = current;
+      if ((photo.roomTag || NO_ROOM_TAG) !== current) {
+        photo.roomTag = current;
+      }
+      roomTagSelect.hidden = false;
+      roomTagSelect.addEventListener("change", () => {
+        photo.roomTag = roomTagSelect.value;
+        savePhotoNow(photo).catch((err) => console.warn("Failed to save tag", err));
+      });
     }
 
     const defectBtn = node.querySelector(".thumb-defect");
@@ -2883,35 +2954,6 @@ ${switchHtml}
   }
 
   els.gpsBtn.addEventListener("click", enableGps);
-
-  els.addGroupBtn.addEventListener("click", () => {
-    if (!state.property) return;
-    const typed = els.addGroupName.value.trim();
-    const name = typed || `Group ${state.property.groups.length + 1}`;
-    try {
-      addGroup(name);
-      els.addGroupName.value = "";
-      const el = els.groups.lastElementChild;
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        const title = el.querySelector(".group-title");
-        if (!typed && title) {
-          title.focus();
-          const range = document.createRange();
-          range.selectNodeContents(title);
-          const sel = window.getSelection();
-          sel.removeAllRanges();
-          sel.addRange(range);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-      toast("Couldn't add group.", "err");
-    }
-  });
-  els.addGroupName.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") els.addGroupBtn.click();
-  });
 
   // Populate the "Add room" type selector once at boot.
   if (els.newRoomType) {

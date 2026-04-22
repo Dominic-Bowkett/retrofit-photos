@@ -70,10 +70,17 @@
         </div>
       </section>
 
+      <div class="view-toggle" role="tablist" aria-label="Photo layout">
+        <button class="view-toggle-btn is-active" data-view="group" role="tab" aria-selected="true" type="button">By group</button>
+        <button class="view-toggle-btn" data-view="tag" role="tab" aria-selected="false" type="button">By tag</button>
+      </div>
+
+      <section id="groups" class="groups" aria-label="Photo groups"></section>
+
       <section class="card rooms-card" aria-label="Rooms">
         <div class="rooms-card-header">
           <h2>Rooms</h2>
-          <p class="rooms-card-hint">Add a room for each space you photograph. Each room groups its Room Photos, Undercuts, Windows, Lighting, Heating, Ventilation and Other evidence.</p>
+          <p class="rooms-card-hint">Add a room for each space you photograph, then tag each photo (Room, Undercuts, Windows, Lighting, Heating, Ventilation, Meters, Other).</p>
         </div>
         <section id="rooms" class="rooms" aria-label="Rooms list"></section>
         <div class="add-room-row">
@@ -84,18 +91,6 @@
           <button id="btn-add-room" class="btn btn-primary-soft" type="button">+ Add room</button>
         </div>
       </section>
-
-      <div class="view-toggle" role="tablist" aria-label="Photo layout">
-        <button class="view-toggle-btn is-active" data-view="group" role="tab" aria-selected="true" type="button">By group</button>
-        <button class="view-toggle-btn" data-view="tag" role="tab" aria-selected="false" type="button">By tag</button>
-      </div>
-
-      <section id="groups" class="groups" aria-label="Photo groups"></section>
-
-      <div class="add-group-row">
-        <input id="new-group-name" type="text" placeholder="Add a new group, e.g. Loft insulation" />
-        <button id="btn-add-group" class="btn" type="button">Add group</button>
-      </div>
 
       <section class="card tips">
         <h2>How it works</h2>
