@@ -1,11 +1,11 @@
 (() => {
   "use strict";
 
-  const DB_NAME = "photo-evidence";
+  const DB_NAME = "retrofit-photos";
   const DB_VERSION = 1;
   const STORE_PROPERTIES = "properties";
   const STORE_PHOTOS = "photos";
-  const ACTIVE_KEY = "photo-evidence:active-property";
+  const ACTIVE_KEY = "retrofit-photos:active-property";
 
   const DEFAULT_GROUPS = [
     { name: "External Elevations" },
@@ -3088,8 +3088,99 @@ ${switchHtml}
     enableGps();
   }
 
+  // One-time import: if a previous build of this app (or the original
+  // photo-evidence app on the same origin) left data in the legacy
+  // "photo-evidence" IndexedDB, copy it into our namespaced DB on first
+  // load so users don't appear to lose their properties. The flag is kept
+  // in localStorage so the import runs at most once per browser.
+  const LEGACY_IMPORT_FLAG = "retrofit-photos:legacy-import-done";
+  const LEGACY_DB = "photo-evidence";
+
+  async function importFromLegacyIfNeeded() {
+    if (typeof indexedDB === "undefined") return;
+    if (localStorage.getItem(LEGACY_IMPORT_FLAG)) return;
+    // Only attempt the import if the legacy DB actually exists. Newer
+    // browsers expose indexedDB.databases(); older ones don't, in which
+    // case we just try to open it — an empty DB won't yield rows.
+    let legacyExists = true;
+    if (typeof indexedDB.databases === "function") {
+      try {
+        const dbs = await indexedDB.databases();
+        legacyExists = dbs.some((d) => d.name === LEGACY_DB);
+      } catch (_) {
+        legacyExists = true;
+      }
+    }
+    if (!legacyExists) {
+      localStorage.setItem(LEGACY_IMPORT_FLAG, "1");
+      return;
+    }
+    try {
+      const legacy = await new Promise((resolve, reject) => {
+        const req = indexedDB.open(LEGACY_DB);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+        // If the legacy DB doesn't exist, onupgradeneeded fires and we
+        // immediately bail out so we don't accidentally create it here.
+        req.onupgradeneeded = () => {
+          try { req.transaction.abort(); } catch (_) {}
+          resolve(null);
+        };
+      });
+      if (!legacy) {
+        localStorage.setItem(LEGACY_IMPORT_FLAG, "1");
+        return;
+      }
+      if (!legacy.objectStoreNames.contains("properties")) {
+        legacy.close();
+        localStorage.setItem(LEGACY_IMPORT_FLAG, "1");
+        return;
+      }
+      const properties = await new Promise((resolve, reject) => {
+        const tx = legacy.transaction("properties", "readonly");
+        const r = tx.objectStore("properties").getAll();
+        r.onsuccess = () => resolve(r.result || []);
+        r.onerror = () => reject(r.error);
+      });
+      const photos = legacy.objectStoreNames.contains("photos")
+        ? await new Promise((resolve, reject) => {
+            const tx = legacy.transaction("photos", "readonly");
+            const r = tx.objectStore("photos").getAll();
+            r.onsuccess = () => resolve(r.result || []);
+            r.onerror = () => reject(r.error);
+          })
+        : [];
+      legacy.close();
+      if (!properties.length && !photos.length) {
+        localStorage.setItem(LEGACY_IMPORT_FLAG, "1");
+        return;
+      }
+      const existing = await IDB.listProperties();
+      const existingIds = new Set(existing.map((p) => p.id));
+      let copiedProps = 0;
+      let copiedPhotos = 0;
+      for (const prop of properties) {
+        if (existingIds.has(prop.id)) continue;
+        await IDB.putProperty(prop);
+        copiedProps += 1;
+      }
+      for (const photo of photos) {
+        await IDB.putPhoto(photo);
+        copiedPhotos += 1;
+      }
+      localStorage.setItem(LEGACY_IMPORT_FLAG, "1");
+      if (copiedProps) {
+        toast(`Imported ${copiedProps} propert${copiedProps === 1 ? "y" : "ies"} from the previous app.`);
+      }
+    } catch (err) {
+      console.warn("Legacy import skipped:", err);
+      // Don't set the flag so we can try again on the next load.
+    }
+  }
+
   (async function boot() {
     try {
+      await importFromLegacyIfNeeded();
       const list = await IDB.listProperties();
       list.sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
       state.properties = list.map((p) => ({ id: p.id, name: p.name }));
