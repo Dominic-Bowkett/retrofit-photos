@@ -1,0 +1,19 @@
+{
+  "name": "Retrofit Photos",
+  "short_name": "Retrofit Photos",
+  "description": "Stamped and geotagged photo evidence for Domestic Energy Assessors, organised by room.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f5f4",
+  "theme_color": "#0b3d2e",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}
