@@ -1202,69 +1202,24 @@ input[type="date"]:focus {
   gap: 10px;
 }
 
-/* ---------- Sub-groups inside a room ---------- */
-.subgroup {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fafbfa;
-  padding: 10px 12px;
-}
-
-.subgroup-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  cursor: pointer;
-  user-select: none;
-}
-
-.subgroup-header:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.subgroup.collapsed .thumbs {
-  display: none;
-}
-
-.subgroup.collapsed .group-chevron {
-  transform: rotate(-90deg);
-}
-
-.subgroup-title-wrap {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.subgroup-title {
-  margin: 0;
-  font-size: 0.95rem;
+/* ---------- Room-tag dropdown on a thumb ---------- */
+.thumb-roomtag {
+  flex: 0 0 auto;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 0.72rem;
   font-weight: 600;
+  border: 1px solid #c7dccf;
+  border-radius: 6px;
+  background: #fff;
   color: var(--primary);
+  letter-spacing: 0.2px;
+  max-width: 110px;
 }
 
-.subgroup-count {
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
-.subgroup-actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.subgroup-actions .btn {
-  font-size: 0.82rem;
-  padding: 6px 10px;
-}
-
-.subgroup .thumbs {
-  margin-top: 10px;
+.thumb-roomtag[value=""]:not(:focus) {
+  color: #8aa095;
+  font-weight: 500;
 }
 
 /* ---------- Defect toggle on thumb ---------- */

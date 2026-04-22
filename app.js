@@ -53,7 +53,10 @@
     "WC": "Wet Room",
     "Other": "Habitable",
   };
-  const ROOM_SUB_GROUPS = [
+  // Optional per-photo tag applied to a room photo. Replaces the old
+  // sub-group layout — a room has a single photos area, and each photo
+  // can carry one of these tags (or none).
+  const ROOM_TAGS = [
     "Room Photos",
     "Undercuts",
     "Windows",
@@ -62,6 +65,7 @@
     "Ventilation",
     "Other",
   ];
+  const NO_ROOM_TAG = "";
   // Storage / export quality: keep individual exported images at near-original
   // fidelity. Camera captures are re-encoded once when the date/GPS overlay is
   // burned in; uploads keep their original bytes unless they exceed the ceiling.
@@ -185,7 +189,6 @@
     groups: document.getElementById("groups"),
     rooms: document.getElementById("rooms"),
     roomTpl: document.getElementById("room-template"),
-    subGroupTpl: document.getElementById("subgroup-template"),
     newRoomType: document.getElementById("new-room-type"),
     addRoomBtn: document.getElementById("btn-add-room"),
     groupTpl: document.getElementById("group-template"),
@@ -458,6 +461,7 @@
       gps: state.gps ? { ...state.gps } : null,
       building: DEFAULT_BUILDING,
       defect: false,
+      roomTag: NO_ROOM_TAG,
       label: "",
     };
   }
@@ -571,6 +575,7 @@
       originalName: file.name || "",
       building: DEFAULT_BUILDING,
       defect: false,
+      roomTag: NO_ROOM_TAG,
       label: "",
     };
   }
@@ -726,16 +731,6 @@
     return property;
   }
 
-  function makeRoomSubGroups() {
-    return ROOM_SUB_GROUPS.map((name) => ({
-      id: uid("sg"),
-      name,
-      photoIds: [],
-      protected: true,
-      subgroup: true,
-    }));
-  }
-
   function makeRoom(roomType) {
     const type = ROOM_TYPES.includes(roomType) ? roomType : DEFAULT_ROOM_TYPE;
     return {
@@ -743,13 +738,14 @@
       name: type,
       roomType: type,
       habitability: DEFAULT_HABITABILITY_BY_TYPE[type] || "Habitable",
-      subGroups: makeRoomSubGroups(),
+      photoIds: [],
     };
   }
 
-  function migrateRooms(property) {
-    if (!property) return false;
+  function migrateRooms(property, photosMap) {
+    if (!property) return { changed: false, dirtyPhotoIds: [] };
     let changed = false;
+    const dirtyPhotoIds = [];
     if (!Array.isArray(property.rooms)) {
       property.rooms = [];
       changed = true;
@@ -772,58 +768,33 @@
           DEFAULT_HABITABILITY_BY_TYPE[room.roomType] || "Habitable";
         changed = true;
       }
-      if (!Array.isArray(room.subGroups) || !room.subGroups.length) {
-        room.subGroups = makeRoomSubGroups();
+      // Flatten the legacy sub-group layout into a single photos list,
+      // stamping each photo with its former sub-group as a roomTag.
+      if (Array.isArray(room.subGroups) && room.subGroups.length) {
+        const merged = Array.isArray(room.photoIds) ? room.photoIds.slice() : [];
+        for (const sg of room.subGroups) {
+          const tag = ROOM_TAGS.includes(sg.name) ? sg.name : NO_ROOM_TAG;
+          for (const pid of sg.photoIds || []) {
+            if (!merged.includes(pid)) merged.push(pid);
+            if (photosMap) {
+              const photo = photosMap.get(pid);
+              if (photo && photo.roomTag !== tag) {
+                photo.roomTag = tag;
+                if (photo.propertyId === property.id) dirtyPhotoIds.push(pid);
+              }
+            }
+          }
+        }
+        room.photoIds = merged;
+        delete room.subGroups;
         changed = true;
-      } else {
-        const byName = new Map();
-        for (const sg of room.subGroups) {
-          if (!sg.id) {
-            sg.id = uid("sg");
-            changed = true;
-          }
-          if (!Array.isArray(sg.photoIds)) {
-            sg.photoIds = [];
-            changed = true;
-          }
-          sg.protected = true;
-          sg.subgroup = true;
-          byName.set((sg.name || "").toLowerCase(), sg);
-        }
-        // Ensure every canonical sub-group exists, in the canonical order.
-        const ordered = [];
-        for (const canonical of ROOM_SUB_GROUPS) {
-          const match = byName.get(canonical.toLowerCase());
-          if (match) {
-            match.name = canonical;
-            ordered.push(match);
-          } else {
-            ordered.push({
-              id: uid("sg"),
-              name: canonical,
-              photoIds: [],
-              protected: true,
-              subgroup: true,
-            });
-            changed = true;
-          }
-        }
-        // Preserve any extra custom sub-groups (shouldn't happen, but stay safe).
-        for (const sg of room.subGroups) {
-          if (!ordered.includes(sg)) ordered.push(sg);
-        }
-        room.subGroups = ordered;
+      }
+      if (!Array.isArray(room.photoIds)) {
+        room.photoIds = [];
+        changed = true;
       }
     }
-    return changed;
-  }
-
-  function forEachRoomSubGroup(property, fn) {
-    if (!property || !Array.isArray(property.rooms)) return;
-    for (const room of property.rooms) {
-      if (!Array.isArray(room.subGroups)) continue;
-      for (const sg of room.subGroups) fn(room, sg);
-    }
+    return { changed, dirtyPhotoIds };
   }
 
   function findGroupById(id) {
@@ -832,20 +803,18 @@
       if (g.id === id) return { group: g, room: null };
     }
     for (const room of state.property.rooms || []) {
-      for (const sg of room.subGroups || []) {
-        if (sg.id === id) return { group: sg, room };
-      }
+      if (room.id === id) return { group: room, room };
     }
     return null;
   }
 
   function allPhotoGroups() {
     // Return every { group, room? } pair that can contain photos — used by
-    // the exports so nothing is missed.
+    // the exports so nothing is missed. Rooms act as their own photo group.
     const out = [];
     for (const g of state.property.groups || []) out.push({ group: g, room: null });
     for (const room of state.property.rooms || []) {
-      for (const sg of room.subGroups || []) out.push({ group: sg, room });
+      out.push({ group: room, room });
     }
     return out;
   }
@@ -916,7 +885,20 @@
       }
     }
 
-    if (migrateRooms(state.property)) saveProperty();
+    const roomMigration = migrateRooms(state.property, state.photos);
+    if (roomMigration.changed) {
+      for (const pid of roomMigration.dirtyPhotoIds) {
+        const photo = state.photos.get(pid);
+        if (photo) {
+          try {
+            await IDB.putPhoto(photo);
+          } catch (err) {
+            console.warn("Failed to persist migrated room photo", err);
+          }
+        }
+      }
+      saveProperty();
+    }
 
     initExpandedForProperty();
     renderMeta();
@@ -1026,17 +1008,15 @@
       }
     }
     for (const room of state.property.rooms || []) {
-      for (const sg of room.subGroups || []) {
-        for (const pid of sg.photoIds) {
-          const photo = state.photos.get(pid);
-          if (!photo) continue;
-          const displaySg = {
-            id: sg.id,
-            name: `${room.name} — ${sg.name}`,
-            photoIds: sg.photoIds,
-          };
-          buckets.get(photoBuildingOf(photo)).push({ group: displaySg, photo });
-        }
+      for (const pid of room.photoIds || []) {
+        const photo = state.photos.get(pid);
+        if (!photo) continue;
+        const displayGroup = {
+          id: room.id,
+          name: room.name,
+          photoIds: room.photoIds,
+        };
+        buckets.get(photoBuildingOf(photo)).push({ group: displayGroup, photo });
       }
     }
     for (const tag of BUILDING_TAGS) {
@@ -1328,63 +1308,31 @@
     const removeBtn = node.querySelector(".btn-remove-room");
     removeBtn.addEventListener("click", () => removeRoom(room.id));
 
-    els.rooms.appendChild(node);
-
-    const subsContainer = node.querySelector(".room-subgroups");
-    for (const sg of room.subGroups) renderSubGroup(room, sg, subsContainer);
-    updateRoomCount(room);
-  }
-
-  function toggleSubGroup(sg, node) {
-    const nowExpanded = !state.expanded.has(sg.id);
-    if (nowExpanded) state.expanded.add(sg.id);
-    else state.expanded.delete(sg.id);
-    node.classList.toggle("collapsed", !nowExpanded);
-    const header = node.querySelector(".subgroup-header");
-    if (header) header.setAttribute("aria-expanded", String(nowExpanded));
-  }
-
-  function renderSubGroup(room, sg, container) {
-    const node = els.subGroupTpl.content.firstElementChild.cloneNode(true);
-    node.dataset.groupId = sg.id;
-
-    const header = node.querySelector(".subgroup-header");
-    const expanded = state.expanded.has(sg.id);
-    if (!expanded) node.classList.add("collapsed");
-    header.setAttribute("aria-expanded", String(expanded));
-    header.addEventListener("click", (e) => {
-      if (e.target.closest("button, input, select, label.btn-upload")) return;
-      toggleSubGroup(sg, node);
-    });
-    header.addEventListener("keydown", (e) => {
-      if (e.target !== header) return;
-      if (e.key === " " || e.key === "Enter") {
-        e.preventDefault();
-        toggleSubGroup(sg, node);
-      }
-    });
-
-    node.querySelector(".subgroup-title").textContent = sg.name;
+    // The photos container carries the room id as data-group-id so the
+    // existing thumb / camera / upload plumbing can treat the room as a
+    // group-like object with { id, name, photoIds }.
+    const photosContainer = node.querySelector(".room-photos");
+    photosContainer.dataset.groupId = room.id;
 
     node.querySelectorAll(".btn-take-photo, .btn-take-photo-tile").forEach((btn) => {
-      btn.addEventListener("click", () => openCamera(sg));
+      btn.addEventListener("click", () => openCamera(room));
     });
-
     const uploadInput = node.querySelector(".file-input-upload");
     if (uploadInput) {
       uploadInput.addEventListener("change", async (e) => {
         const files = Array.from(e.target.files || []);
         uploadInput.value = "";
-        if (files.length) await addUploadedPhotos(sg, files);
+        if (files.length) await addUploadedPhotos(room, files);
       });
     }
 
-    container.appendChild(node);
-    for (const id of sg.photoIds) {
+    els.rooms.appendChild(node);
+
+    for (const id of room.photoIds || []) {
       const photo = state.photos.get(id);
-      if (photo) renderThumb(sg, photo);
+      if (photo) renderThumb(room, photo, { isRoomPhoto: true });
     }
-    updateGroupCount(sg);
+    updateRoomCount(room);
   }
 
   function addRoomFromPreset(type) {
@@ -1409,23 +1357,18 @@
     const idx = state.property.rooms.findIndex((r) => r.id === roomId);
     if (idx === -1) return;
     const room = state.property.rooms[idx];
-    const count = (room.subGroups || []).reduce(
-      (n, sg) => n + sg.photoIds.length,
-      0
-    );
+    const count = (room.photoIds || []).length;
     const label = room.name || room.roomType || "Room";
     if (!confirm(
       `Remove the "${label}" room${count ? ` and its ${count} photo${count === 1 ? "" : "s"}` : ""}? This can't be undone.`
     )) return;
     (async () => {
-      for (const sg of room.subGroups || []) {
-        for (const pid of sg.photoIds) {
-          state.photos.delete(pid);
-          try {
-            await IDB.deletePhoto(pid);
-          } catch (err) {
-            console.error(err);
-          }
+      for (const pid of room.photoIds || []) {
+        state.photos.delete(pid);
+        try {
+          await IDB.deletePhoto(pid);
+        } catch (err) {
+          console.error(err);
         }
       }
       state.property.rooms.splice(idx, 1);
@@ -1449,8 +1392,7 @@
       `[data-room-id="${room.id}"] .room-count`
     );
     if (!node) return;
-    let n = 0;
-    for (const sg of room.subGroups || []) n += sg.photoIds.length;
+    const n = (room.photoIds || []).length;
     node.textContent = `${n} photo${n === 1 ? "" : "s"}`;
   }
 
@@ -1499,6 +1441,30 @@
           renderGroups();
         }
       });
+    }
+
+    const roomTagSelect = node.querySelector(".thumb-roomtag");
+    if (roomTagSelect) {
+      if (options.isRoomPhoto) {
+        for (const tag of ROOM_TAGS) {
+          const opt = document.createElement("option");
+          opt.value = tag;
+          opt.textContent = tag;
+          roomTagSelect.appendChild(opt);
+        }
+        const current = ROOM_TAGS.includes(photo.roomTag) ? photo.roomTag : NO_ROOM_TAG;
+        roomTagSelect.value = current;
+        if ((photo.roomTag || NO_ROOM_TAG) !== current) {
+          photo.roomTag = current;
+        }
+        roomTagSelect.hidden = false;
+        roomTagSelect.addEventListener("change", () => {
+          photo.roomTag = roomTagSelect.value;
+          savePhotoNow(photo).catch((err) => console.warn("Failed to save room tag", err));
+        });
+      } else {
+        roomTagSelect.remove();
+      }
     }
 
     const defectBtn = node.querySelector(".thumb-defect");
@@ -1579,7 +1545,8 @@
     // Make sure the receiving group is visible so the new thumbs appear.
     expandGroup(group);
     const owner = findGroupById(group.id);
-    if (owner && owner.room) expandRoom(owner.room);
+    const isRoomPhoto = !!(owner && owner.room);
+    if (isRoomPhoto) expandRoom(owner.room);
 
     let missingExifCount = 0;
     for (const file of imageFiles) {
@@ -1591,14 +1558,14 @@
         group.photoIds.push(photo.id);
         if (!photo.takenAt || !photo.gps) missingExifCount += 1;
         await savePhotoNow(photo);
-        renderThumb(group, photo);
-        updateGroupCount(group);
+        renderThumb(group, photo, { isRoomPhoto });
+        if (isRoomPhoto) updateRoomCount(owner.room);
+        else updateGroupCount(group);
       } catch (err) {
         console.error(err);
         toast(`Failed to process ${file.name}`, "err");
       }
     }
-    if (owner && owner.room) updateRoomCount(owner.room);
     updateExportButton();
     saveProperty();
     if (missingExifCount) {
@@ -1835,6 +1802,7 @@
       gps: state.gps ? { ...state.gps } : null,
       building: DEFAULT_BUILDING,
       defect: false,
+      roomTag: NO_ROOM_TAG,
       label: "",
     };
     camera.buffer.push(photo);
@@ -1875,7 +1843,8 @@
     // Auto-expand the group so newly-captured thumbs are immediately visible.
     expandGroup(group);
     const owner = findGroupById(group.id);
-    if (owner && owner.room) expandRoom(owner.room);
+    const isRoomPhoto = !!(owner && owner.room);
+    if (isRoomPhoto) expandRoom(owner.room);
     for (const photo of photos) {
       photo.propertyId = state.property.id;
       photo.label = `${group.name} — ${group.photoIds.length + 1}`;
@@ -1886,10 +1855,10 @@
       } catch (err) {
         console.error(err);
       }
-      renderThumb(group, photo);
-      updateGroupCount(group);
+      renderThumb(group, photo, { isRoomPhoto });
+      if (isRoomPhoto) updateRoomCount(owner.room);
+      else updateGroupCount(group);
     }
-    if (owner && owner.room) updateRoomCount(owner.room);
     updateExportButton();
     saveProperty();
     toast(`Added ${photos.length} photo${photos.length === 1 ? "" : "s"} to ${group.name}.`);
@@ -2026,16 +1995,10 @@
     const meta = state.property.meta;
 
     // For the PDF we treat layout == "group" (the default) as one section per
-    // real group, and layout == "tag" as one virtual section per building
-    // tag that actually has photos. Each entry in the section carries the
-    // source photo plus (in tag mode) a subtitle pointing back at the
-    // original group, e.g. "1. Walls — Rear elevation".
-    //
-    // Rooms become additional virtual sections: one per room, whose entries
-    // are the photos from its sub-groups. The existing virtual-section
-    // renderer already emits a sub-heading whenever the source group
-    // changes, so a room's sub-groups (Room Photos, Undercuts, …) appear as
-    // clusters under the room title.
+    // real group plus one per non-empty room, and layout == "tag" as one
+    // virtual section per building tag that actually has photos. Room
+    // photos are tagged via photo.roomTag (Room Photos / Undercuts / ...)
+    // rather than living in separate sub-groups.
     let groupsWithPhotos;
     if (layout === "tag") {
       const buckets = new Map();
@@ -2048,18 +2011,13 @@
         }
       }
       for (const room of state.property.rooms || []) {
-        for (const sg of room.subGroups || []) {
-          for (const pid of sg.photoIds) {
-            const photo = state.photos.get(pid);
-            if (!photo) continue;
-            buckets.get(photoBuildingOf(photo)).push({
-              photo,
-              source: {
-                id: sg.id,
-                name: `${room.name} — ${sg.name}`,
-              },
-            });
-          }
+        for (const pid of room.photoIds || []) {
+          const photo = state.photos.get(pid);
+          if (!photo) continue;
+          buckets.get(photoBuildingOf(photo)).push({
+            photo,
+            source: { id: room.id, name: room.name },
+          });
         }
       }
       groupsWithPhotos = [];
@@ -2077,20 +2035,11 @@
     } else {
       groupsWithPhotos = state.property.groups.filter((g) => g.photoIds.length > 0);
       for (const room of state.property.rooms || []) {
-        const entries = [];
-        for (const sg of room.subGroups || []) {
-          for (const pid of sg.photoIds) {
-            const photo = state.photos.get(pid);
-            if (photo) entries.push({ photo, source: sg });
-          }
-        }
-        if (!entries.length) continue;
+        if (!(room.photoIds || []).length) continue;
         groupsWithPhotos.push({
           id: `room-${room.id}`,
           name: `${room.name} (${room.habitability})`,
-          photoIds: entries.map((e) => e.photo.id),
-          virtual: true,
-          entries,
+          photoIds: room.photoIds.slice(),
           room,
         });
       }
@@ -2240,7 +2189,8 @@
               ? `[${building}] `
               : "";
         const defectTag = photo.defect ? "[DEFECT] " : "";
-        const labelText = `${index}. ${prefix}${defectTag}${photo.label || sourceGroup.name}`;
+        const roomTagTxt = photo.roomTag ? `[${photo.roomTag}] ` : "";
+        const labelText = `${index}. ${prefix}${defectTag}${roomTagTxt}${photo.label || sourceGroup.name}`;
         // Captions: single line for camera captures, a 3-line stack for
         // uploaded photos so Captured / Location / Uploaded each get their own line.
         const capH = isUpload ? 58 : 16;
@@ -2488,7 +2438,7 @@
     };
     for (const g of state.property.groups) addFrom(g, {});
     for (const room of state.property.rooms || []) {
-      for (const sg of room.subGroups || []) addFrom(sg, { room });
+      addFrom(room, { room });
     }
     return items;
   }
@@ -2611,18 +2561,13 @@
         }
       }
       for (const room of state.property.rooms || []) {
-        for (const sg of room.subGroups || []) {
-          for (const pid of sg.photoIds) {
-            const photo = state.photos.get(pid);
-            if (!photo) continue;
-            buckets.get(photoBuildingOf(photo)).push({
-              photo,
-              source: {
-                id: sg.id,
-                name: `${room.name} — ${sg.name}`,
-              },
-            });
-          }
+        for (const pid of room.photoIds || []) {
+          const photo = state.photos.get(pid);
+          if (!photo) continue;
+          buckets.get(photoBuildingOf(photo)).push({
+            photo,
+            source: { id: room.id, name: room.name },
+          });
         }
       }
       sections = [];
@@ -2649,19 +2594,17 @@
             .filter(Boolean),
         }));
       for (const room of state.property.rooms || []) {
-        const entries = [];
-        for (const sg of room.subGroups || []) {
-          for (const pid of sg.photoIds) {
+        const entries = (room.photoIds || [])
+          .map((pid) => {
             const photo = state.photos.get(pid);
-            if (photo) entries.push({ photo, source: sg });
-          }
-        }
+            return photo ? { photo, source: room } : null;
+          })
+          .filter(Boolean);
         if (!entries.length) continue;
         sections.push({
           id: `room-${room.id}`,
           name: `${room.name} (${room.habitability})`,
           entries,
-          clustered: true,
         });
       }
     }
@@ -2686,9 +2629,12 @@
       const tagClass = building === DEFAULT_BUILDING ? "tag tag-main" : "tag tag-ext";
       const defectClass = photo.defect ? " has-defect" : "";
       const defectBadge = photo.defect ? `<span class="tag tag-defect">Defect</span> ` : "";
+      const roomTagBadge = photo.roomTag
+        ? `<span class="tag tag-room">${escapeHtml(photo.roomTag)}</span> `
+        : "";
       let html = `<figure class="fig${defectClass}">`;
       html += `<a href="${hrefEsc}" target="_blank" rel="noopener"><img src="${hrefEsc}" alt="${labelEsc}" loading="lazy"></a>`;
-      html += `<figcaption><div class="label">${defectBadge}<span class="${tagClass}">${escapeHtml(building)}</span> ${labelEsc}</div>`;
+      html += `<figcaption><div class="label">${defectBadge}${roomTagBadge}<span class="${tagClass}">${escapeHtml(building)}</span> ${labelEsc}</div>`;
       if (photo.source === "upload") {
         html += `<div class="meta-line">Date taken: ${escapeHtml(fmtIso(photo.takenAt))}</div>`;
         html += `<div class="meta-line">Location taken: ${escapeHtml(photo.gps ? formatGps(photo.gps) : "not in photo metadata")}</div>`;
@@ -2708,7 +2654,7 @@
     let sectionsHtml = "";
     for (const s of sections) {
       sectionsHtml += `<section id="g-${escapeHtml(s.id)}" class="group"><h2>${escapeHtml(s.name)}</h2>`;
-      const useClusters = layout === "tag" || s.clustered;
+      const useClusters = layout === "tag";
       if (useClusters) {
         // Cluster the section's photos by their source group so the reader still
         // sees a group heading above each cluster of photos.
@@ -2785,6 +2731,7 @@ figcaption{padding:10px 12px;font-size:0.88rem}
 .tag-main{background:#eef5ef;color:#0b3d2e}
 .tag-ext{background:#fff2d6;color:#7a5200}
 .tag-defect{background:#fdecec;color:#b22d2d;border:1px solid #f3c1c1}
+.tag-room{background:#e8f0f8;color:#1853a1;border:1px solid #c9d7e6}
 figure.has-defect{border-color:#f3c1c1;box-shadow:0 0 0 1px #f3c1c1 inset}
 figure.has-defect .label{color:#b22d2d}
 .meta-line{color:#5b6b65;font-size:0.82rem;margin:2px 0}
@@ -2853,7 +2800,7 @@ ${switchHtml}
         if (!dir) {
           if (room) {
             const roomSlug = slugify(`${room.name || room.roomType} ${room.habitability}`);
-            dir = uniqueDir(`rooms/${roomSlug}/${slugify(group.name)}`);
+            dir = uniqueDir(`rooms/${roomSlug}`);
           } else {
             dir = uniqueDir(slugify(group.name));
           }
@@ -2861,8 +2808,9 @@ ${switchHtml}
         }
         const folder = zip.folder(dir);
         const defectPrefix = photo.defect ? "DEFECT_" : "";
+        const tagPrefix = room && photo.roomTag ? `${slugify(photo.roomTag)}_` : "";
         const labelSlug = slugify(photo.label || `${group.name}-${index}`);
-        const name = `${defectPrefix}${String(index).padStart(2, "0")}_${labelSlug}.jpg`;
+        const name = `${defectPrefix}${tagPrefix}${String(index).padStart(2, "0")}_${labelSlug}.jpg`;
         folder.file(name, bytes, { date: new Date(stamp) });
         photoPaths.set(photo.id, `${dir}/${name}`);
       }

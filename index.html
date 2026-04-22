@@ -146,6 +146,9 @@
             <option value="Ext3">Ext3</option>
             <option value="Ext4">Ext4</option>
           </select>
+          <select class="thumb-roomtag" aria-label="Room tag" hidden>
+            <option value="">— Tag —</option>
+          </select>
           <span class="thumb-group-hint"></span>
         </div>
         <img alt="" />
@@ -179,40 +182,25 @@
               <span class="sr-only">Habitability</span>
               <select class="room-habitability" aria-label="Habitability"></select>
             </label>
-            <button class="btn btn-ghost-dark btn-remove-room" type="button" title="Remove room">Remove</button>
-          </div>
-        </header>
-        <div class="room-body">
-          <div class="room-subgroups"></div>
-        </div>
-      </article>
-    </template>
-
-    <template id="subgroup-template">
-      <section class="subgroup" data-group-id="">
-        <header class="subgroup-header" role="button" tabindex="0" aria-expanded="false">
-          <div class="subgroup-title-wrap">
-            <span class="group-chevron" aria-hidden="true">▾</span>
-            <h3 class="subgroup-title"></h3>
-            <span class="subgroup-count">0 photos</span>
-          </div>
-          <div class="subgroup-actions">
             <button class="btn btn-primary-soft btn-take-photo" type="button">Take photo</button>
             <label class="btn btn-upload">
               <input type="file" class="file-input-upload" accept="image/*" multiple hidden />
               Upload
             </label>
+            <button class="btn btn-ghost-dark btn-remove-room" type="button" title="Remove room">Remove</button>
           </div>
         </header>
-        <div class="thumbs">
-          <button type="button" class="thumb thumb-add btn-take-photo-tile" title="Take another photo">
-            <span class="thumb-add-inner">
-              <span class="thumb-add-plus" aria-hidden="true">+</span>
-              <span class="thumb-add-label">Take photo</span>
-            </span>
-          </button>
+        <div class="room-body">
+          <div class="room-photos thumbs">
+            <button type="button" class="thumb thumb-add btn-take-photo-tile" title="Take another photo">
+              <span class="thumb-add-inner">
+                <span class="thumb-add-plus" aria-hidden="true">+</span>
+                <span class="thumb-add-label">Take photo</span>
+              </span>
+            </button>
+          </div>
         </div>
-      </section>
+      </article>
     </template>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
