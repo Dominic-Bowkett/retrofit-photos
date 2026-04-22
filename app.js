@@ -1261,20 +1261,32 @@
       }
     });
 
-    const title = node.querySelector(".room-title");
-    title.textContent = room.name;
-    title.addEventListener("blur", () => {
-      const v = title.textContent.trim();
-      room.name = v || room.roomType || "Room";
-      title.textContent = room.name;
+    const title = node.querySelector(".room-title-input");
+    title.value = room.name;
+    const commitTitle = () => {
+      const v = title.value.trim();
+      const next = v || room.roomType || "Room";
+      if (next === room.name) return;
+      room.name = next;
+      title.value = next;
+      saveProperty();
+    };
+    title.addEventListener("input", () => {
+      // Persist every few keystrokes via the debounced saver so refreshes
+      // mid-type don't lose the edit.
+      room.name = title.value.trim() || room.roomType || "Room";
       saveProperty();
     });
+    title.addEventListener("blur", commitTitle);
     title.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
         title.blur();
       }
     });
+    // Stop the header's click handler from toggling the room when the user
+    // taps the name field to edit it.
+    title.addEventListener("click", (e) => e.stopPropagation());
 
     const typeSelect = node.querySelector(".room-type");
     for (const t of ROOM_TYPES) {
@@ -1291,7 +1303,7 @@
       // track the new type so the label stays useful.
       if (!room.name || room.name === prev) {
         room.name = room.roomType;
-        title.textContent = room.name;
+        title.value = room.name;
       }
       saveProperty();
     });

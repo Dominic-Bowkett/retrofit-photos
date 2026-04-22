@@ -1131,17 +1131,33 @@ input[type="date"]:focus {
   min-width: 0;
 }
 
-.room-title {
-  margin: 0;
-  font-size: 1.1rem;
+.room-title-input {
+  font: inherit;
+  font-size: 1.05rem;
   font-weight: 600;
-  padding: 2px 4px;
-  border-radius: 6px;
-  min-width: 120px;
+  color: var(--ink);
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  min-width: 180px;
+  max-width: 100%;
+  flex: 1 1 180px;
 }
 
-.room-title:focus {
+.room-title-input::placeholder {
+  color: #9aa6a1;
+  font-weight: 500;
+}
+
+.room-title-input:hover {
+  border-color: #c4d1cb;
+}
+
+.room-title-input:focus {
   outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
   background: #f6faf7;
 }
 
