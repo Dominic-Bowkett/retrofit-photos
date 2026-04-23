@@ -2235,7 +2235,7 @@
     doc.setFont("helvetica", "bold");
     doc.setFontSize(16);
     doc.text("Contents", margin, margin + 6);
-    doc.setDrawColor(11, 61, 46);
+    doc.setDrawColor(18, 18, 18);
     doc.setLineWidth(1.2);
     doc.line(margin, margin + 12, pageW - margin, margin + 12);
     doc.setLineWidth(0.2);
@@ -2266,7 +2266,7 @@
       doc.setFont("helvetica", "bold");
       doc.setFontSize(16);
       doc.text(displayName, margin, margin + 6);
-      doc.setDrawColor(11, 61, 46);
+      doc.setDrawColor(18, 18, 18);
       doc.setLineWidth(1.2);
       doc.line(margin, margin + 12, pageW - margin, margin + 12);
       doc.setLineWidth(0.2);
@@ -2324,7 +2324,7 @@
           cursorY += groupIndex === 0 ? 0 : 8;
           doc.setFont("helvetica", "bold");
           doc.setFontSize(12);
-          doc.setTextColor(11, 61, 46);
+          doc.setTextColor(18, 18, 18);
           doc.text(sourceGroup.name, margin, cursorY);
           doc.setDrawColor(190);
           doc.setLineWidth(0.4);
@@ -2452,9 +2452,10 @@
     doc.setFont("helvetica", "normal");
     doc.setFontSize(12);
     const colRight = pageW - margin;
-    const LINK_R = 22;
-    const LINK_G = 82;
-    const LINK_B = 178;
+    // Dark amber link colour (amber-700) to match the app's black + orange theme.
+    const LINK_R = 180;
+    const LINK_G = 83;
+    const LINK_B = 9;
 
     if (!groupsWithPhotos.length) {
       doc.setTextColor(120);
@@ -2857,45 +2858,45 @@
 
     const css = `
 *{box-sizing:border-box}
-html,body{margin:0;padding:0;background:#f4f5f4;color:#13241d;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:15px;line-height:1.45}
+html,body{margin:0;padding:0;background:#fbf9f4;color:#14120f;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:15px;line-height:1.45}
 .wrap{max-width:980px;margin:0 auto;padding:16px}
-header.cover{background:#0b3d2e;color:#fff;padding:18px 20px;border-radius:12px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,0.05)}
-header.cover h1{margin:0 0 8px;font-size:1.35rem}
-.layout-switch{background:#fff;border:1px solid #dde3e0;border-radius:10px;padding:10px 14px;margin:0 0 16px;font-size:0.88rem;color:#5b6b65}
-.layout-switch strong{color:#13241d;margin:0 4px}
-.layout-switch a{color:#1652b2;text-decoration:underline}
+header.cover{background:#121212;color:#fff;padding:18px 20px;border-radius:12px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,0.05);border:1px solid #121212}
+header.cover h1{margin:0 0 8px;font-size:1.35rem;color:#f59e0b}
+.layout-switch{background:#fff;border:1px solid #ece6d9;border-radius:10px;padding:10px 14px;margin:0 0 16px;font-size:0.88rem;color:#6b6158}
+.layout-switch strong{color:#14120f;margin:0 4px}
+.layout-switch a{color:#b45309;text-decoration:underline}
 .cover dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:6px 0 0;font-size:0.9rem}
 .cover dt{font-weight:600;opacity:0.85}
 .cover dd{margin:0}
-.toc,section.group{background:#fff;border:1px solid #dde3e0;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,0.04)}
+.toc,section.group{background:#fff;border:1px solid #ece6d9;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,0.04)}
 .toc h2,section.group h2{margin:0 0 10px;font-size:1.1rem}
 .toc ul{list-style:none;padding:0;margin:0}
 .toc li{padding:3px 0}
 .toc .toc-section{font-weight:700;margin-top:6px}
 .toc .toc-section-name{display:inline-block;margin-bottom:4px}
 .toc .toc-section > ul{margin:4px 0 6px;padding-left:14px;font-weight:normal}
-.toc a{color:#1652b2;text-decoration:underline}
-.toc .count{color:#5b6b65;font-size:0.85rem;margin-left:6px}
-.total{margin:10px 0 0;font-weight:700;font-size:0.95rem;color:#0b3d2e}
+.toc a{color:#b45309;text-decoration:underline}
+.toc .count{color:#6b6158;font-size:0.85rem;margin-left:6px}
+.total{margin:10px 0 0;font-weight:700;font-size:0.95rem;color:#78350f}
 .photos{display:grid;grid-template-columns:1fr;gap:16px}
 .tag-cluster-html{margin:12px 0 18px}
 .tag-cluster-html:first-of-type{margin-top:0}
-.tag-cluster-title-html{margin:0 0 10px;font-size:0.85rem;font-weight:700;color:#0b3d2e;text-transform:uppercase;letter-spacing:0.5px;padding:0 0 4px;border-bottom:1px solid #d6e3dc;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-.tag-cluster-count-html{font-weight:500;color:#5b6b65;font-size:0.78rem;text-transform:none;letter-spacing:normal}
+.tag-cluster-title-html{margin:0 0 10px;font-size:0.85rem;font-weight:700;color:#14120f;text-transform:uppercase;letter-spacing:0.5px;padding:0 0 4px;border-bottom:2px solid #f59e0b;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.tag-cluster-count-html{font-weight:500;color:#6b6158;font-size:0.78rem;text-transform:none;letter-spacing:normal}
 @media (min-width:720px){.photos{grid-template-columns:1fr 1fr}}
-figure{margin:0;border:1px solid #eef3f0;border-radius:10px;overflow:hidden;background:#fff;display:flex;flex-direction:column}
+figure{margin:0;border:1px solid #ece6d9;border-radius:10px;overflow:hidden;background:#fff;display:flex;flex-direction:column}
 figure img{display:block;width:100%;height:auto;background:#000}
 figcaption{padding:10px 12px;font-size:0.88rem}
 .label{font-weight:600;margin-bottom:4px}
 .tag{display:inline-block;font-size:0.7rem;font-weight:700;padding:1px 6px;border-radius:999px;margin-right:6px;vertical-align:middle;letter-spacing:0.3px}
-.tag-main{background:#eef5ef;color:#0b3d2e}
-.tag-ext{background:#fff2d6;color:#7a5200}
+.tag-main{background:#fff5df;color:#78350f}
+.tag-ext{background:#fde7b8;color:#7a4a00}
 .tag-defect{background:#fdecec;color:#b22d2d;border:1px solid #f3c1c1}
-.tag-room{background:#e8f0f8;color:#1853a1;border:1px solid #c9d7e6}
+.tag-room{background:#14120f;color:#f59e0b;border:1px solid #14120f}
 figure.has-defect{border-color:#f3c1c1;box-shadow:0 0 0 1px #f3c1c1 inset}
 figure.has-defect .label{color:#b22d2d}
-.meta-line{color:#5b6b65;font-size:0.82rem;margin:2px 0}
-.open-link{display:inline-block;margin-top:6px;color:#1652b2;text-decoration:underline;font-size:0.82rem}
+.meta-line{color:#6b6158;font-size:0.82rem;margin:2px 0}
+.open-link{display:inline-block;margin-top:6px;color:#b45309;text-decoration:underline;font-size:0.82rem}
 `;
 
     const title = state.property.name || meta.address || "Photo Evidence";
