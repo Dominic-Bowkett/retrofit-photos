@@ -249,10 +249,44 @@ input[type="date"]:focus {
   gap: 12px;
   margin-bottom: 12px;
   flex-wrap: wrap;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 8px;
+  padding: 2px 0;
+}
+
+.meta-header:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.meta-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .meta-header h2 {
   margin: 0;
+}
+
+.meta-chevron {
+  line-height: 1;
+  color: var(--muted);
+  font-size: 0.95rem;
+  transition: transform 0.18s ease;
+}
+
+.meta.collapsed .meta-chevron {
+  transform: rotate(-90deg);
+}
+
+.meta.collapsed .meta-header {
+  margin-bottom: 0;
+}
+
+.meta.collapsed #meta-grid {
+  display: none;
 }
 
 .meta-actions {

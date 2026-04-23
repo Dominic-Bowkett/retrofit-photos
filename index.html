@@ -38,15 +38,18 @@
     </header>
 
     <main class="container">
-      <section class="card meta">
-        <div class="meta-header">
-          <h2>Job details</h2>
+      <section class="card meta" id="meta-card">
+        <div class="meta-header" id="meta-header" role="button" tabindex="0" aria-expanded="true" aria-controls="meta-grid">
+          <div class="meta-heading">
+            <span class="group-chevron meta-chevron" aria-hidden="true">▾</span>
+            <h2>Job details</h2>
+          </div>
           <div class="meta-actions">
             <span class="save-status" id="save-status" aria-live="polite">Saved</span>
             <button id="btn-delete-property" class="btn btn-danger-ghost" type="button">Delete property</button>
           </div>
         </div>
-        <div class="grid">
+        <div class="grid" id="meta-grid">
           <label>
             <span>Property name (used in the switcher)</span>
             <input id="meta-name" type="text" placeholder="e.g. 12 Acacia Avenue" />

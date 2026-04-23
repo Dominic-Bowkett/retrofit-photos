@@ -230,6 +230,8 @@
     newPropBtn: document.getElementById("btn-new-property"),
     delPropBtn: document.getElementById("btn-delete-property"),
     saveStatus: document.getElementById("save-status"),
+    metaCard: document.getElementById("meta-card"),
+    metaHeader: document.getElementById("meta-header"),
     metaName: document.getElementById("meta-name"),
     metaAssessor: document.getElementById("meta-assessor"),
     metaAddress: document.getElementById("meta-address"),
@@ -1002,6 +1004,21 @@
     els.metaAddress.value = p.meta.address || "";
     els.metaRef.value = p.meta.ref || "";
     els.metaDate.value = p.meta.date || todayISO();
+    applyMetaCollapsed(!!p.meta.collapsed);
+  }
+
+  function applyMetaCollapsed(collapsed) {
+    if (!els.metaCard || !els.metaHeader) return;
+    els.metaCard.classList.toggle("collapsed", collapsed);
+    els.metaHeader.setAttribute("aria-expanded", String(!collapsed));
+  }
+
+  function toggleMetaCollapsed() {
+    if (!state.property) return;
+    const next = !state.property.meta.collapsed;
+    state.property.meta.collapsed = next;
+    applyMetaCollapsed(next);
+    saveProperty();
   }
 
   // -------------------- Groups / photos rendering --------------------
@@ -3023,6 +3040,22 @@ ${switchHtml}
     els.metaAddress.addEventListener("input", handler);
     els.metaRef.addEventListener("input", handler);
     els.metaDate.addEventListener("change", handler);
+
+    if (els.metaHeader) {
+      els.metaHeader.addEventListener("click", (e) => {
+        // Don't collapse when the user is interacting with controls inside
+        // the header (Delete property, the save-status badge, etc.).
+        if (e.target.closest("button, input, select, a, [contenteditable='true']")) return;
+        toggleMetaCollapsed();
+      });
+      els.metaHeader.addEventListener("keydown", (e) => {
+        if (e.target !== els.metaHeader) return;
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          toggleMetaCollapsed();
+        }
+      });
+    }
   }
 
   els.gpsBtn.addEventListener("click", enableGps);
