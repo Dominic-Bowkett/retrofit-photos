@@ -1342,3 +1342,33 @@ input[type="date"]:focus {
   }
 }
 
+/* ---------- Defects view ---------- */
+body.view-defects .rooms-card,
+body.view-defects .add-room-row {
+  display: none;
+}
+
+.group.group-defect {
+  border-left: 4px solid var(--danger);
+}
+
+.group.group-defect .group-title {
+  color: var(--danger);
+}
+
+.group.group-defect .group-count {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.defects-empty {
+  margin: 0;
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px dashed var(--line);
+  background: #fffaed;
+  color: var(--muted);
+  font-size: 0.92rem;
+  text-align: center;
+}
+

@@ -1043,9 +1043,11 @@
   }
 
   function setView(view) {
-    if (view !== "group" && view !== "tag") return;
+    if (view !== "group" && view !== "tag" && view !== "defects") return;
     if (state.view === view) return;
     state.view = view;
+    document.body.classList.toggle("view-defects", view === "defects");
+    document.body.classList.toggle("view-tag", view === "tag");
     for (const btn of els.viewToggleBtns) {
       const active = btn.dataset.view === view;
       btn.classList.toggle("is-active", active);
@@ -1078,11 +1080,107 @@
     els.groups.innerHTML = "";
     if (state.view === "tag") {
       renderByTag();
+    } else if (state.view === "defects") {
+      renderByDefects();
     } else {
       for (const group of state.property.groups) {
         renderGroup(group, els.groups);
       }
     }
+  }
+
+  function renderByDefects() {
+    // One synthetic section per source (flat group or room) that holds
+    // defect photos. Rooms appear under their room name.
+    const sections = [];
+    for (const g of state.property.groups || []) {
+      const entries = [];
+      for (const pid of g.photoIds) {
+        const photo = state.photos.get(pid);
+        if (photo && photo.defect) entries.push({ photo, source: g });
+      }
+      if (entries.length) {
+        sections.push({
+          id: `defect-${g.id}`,
+          name: g.name,
+          entries,
+          photoIds: entries.map((e) => e.photo.id),
+          sourceGroup: g,
+          isRoom: false,
+        });
+      }
+    }
+    for (const room of state.property.rooms || []) {
+      const entries = [];
+      for (const pid of room.photoIds || []) {
+        const photo = state.photos.get(pid);
+        if (photo && photo.defect) entries.push({ photo, source: room });
+      }
+      if (entries.length) {
+        sections.push({
+          id: `defect-room-${room.id}`,
+          name: `${room.name} (${room.habitability})`,
+          entries,
+          photoIds: entries.map((e) => e.photo.id),
+          sourceGroup: room,
+          isRoom: true,
+        });
+      }
+    }
+
+    if (!sections.length) {
+      const empty = document.createElement("p");
+      empty.className = "defects-empty";
+      empty.textContent =
+        "No defects flagged — tap a photo's Defect chip to flag it and it'll appear here.";
+      els.groups.appendChild(empty);
+      return;
+    }
+
+    for (const section of sections) {
+      state.expanded.add(section.id);
+      renderDefectSection(section);
+    }
+  }
+
+  function renderDefectSection(section) {
+    const node = els.groupTpl.content.firstElementChild.cloneNode(true);
+    node.dataset.groupId = section.id;
+    node.classList.add("group-virtual", "group-defect");
+
+    const header = node.querySelector(".group-header");
+    const expanded = state.expanded.has(section.id);
+    if (!expanded) node.classList.add("collapsed");
+    header.setAttribute("aria-expanded", String(expanded));
+    header.addEventListener("click", (e) => {
+      if (e.target.closest("button, input, [contenteditable='true']")) return;
+      toggleGroup(section, node);
+    });
+    header.addEventListener("keydown", (e) => {
+      if (e.target !== header) return;
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        toggleGroup(section, node);
+      }
+    });
+
+    const title = node.querySelector(".group-title");
+    title.textContent = section.name;
+    title.setAttribute("contenteditable", "false");
+    title.classList.add("group-title-locked");
+
+    const actions = node.querySelector(".group-actions");
+    if (actions) actions.remove();
+
+    els.groups.appendChild(node);
+
+    for (const { photo } of section.entries) {
+      renderThumb(section.sourceGroup, photo, {
+        containerGroupId: section.id,
+        isRoomPhoto: section.isRoom,
+      });
+    }
+    updateGroupCount(section);
   }
 
   function renderByTag() {
@@ -1570,6 +1668,9 @@
         photo.defect = !photo.defect;
         applyDefectUi();
         savePhotoNow(photo).catch((err) => console.warn("Failed to save defect flag", err));
+        // In the Defects view an un-flagged photo no longer belongs, and
+        // a newly-flagged one should appear — re-render the list.
+        if (state.view === "defects") renderGroups();
       });
     }
 
@@ -1590,7 +1691,7 @@
         console.error(err);
       }
       saveProperty();
-      if (state.view === "tag") renderGroups();
+      if (state.view === "tag" || state.view === "defects") renderGroups();
     });
 
     // Drag-to-reorder is only meaningful in the default "by group" layout
