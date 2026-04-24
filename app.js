@@ -3140,233 +3140,375 @@
     })[c]);
   }
 
-  function buildHtmlIndex(photoPaths, opts) {
-    const options = opts || {};
-    const layout = options.layout === "tag" ? "tag" : "group";
-    const otherHref = options.otherHref || null;
-    const otherLabel = options.otherLabel || null;
-
+  function buildHtmlIndex(photoPaths) {
     const meta = state.property.meta || {};
-    const fmtIso = (iso) => (iso ? new Date(iso).toLocaleString() : "not in photo metadata");
+    const title = state.property.name || meta.address || "Retrofit Photos";
 
-    // Build sections list. For layout == "group" each real group is a
-    // section, followed by one section per non-empty room. For layout ==
-    // "tag" each non-empty building tag is a section whose photo entries
-    // carry their source group for the sub-title.
-    let sections;
-    if (layout === "tag") {
-      const buckets = new Map();
-      for (const t of BUILDING_TAGS) buckets.set(t, []);
-      for (const g of state.property.groups) {
-        for (const pid of g.photoIds) {
-          const photo = state.photos.get(pid);
-          if (!photo) continue;
-          buckets.get(photoBuildingOf(photo)).push({ photo, source: g });
-        }
-      }
-      for (const room of state.property.rooms || []) {
-        for (const pid of room.photoIds || []) {
-          const photo = state.photos.get(pid);
-          if (!photo) continue;
-          buckets.get(photoBuildingOf(photo)).push({
-            photo,
-            source: { id: room.id, name: room.name },
-          });
-        }
-      }
-      sections = [];
-      for (const tag of BUILDING_TAGS) {
-        const entries = buckets.get(tag);
-        if (!entries.length) continue;
-        sections.push({
-          id: `tag-${tag}`,
-          name: tag,
-          entries,
-        });
-      }
-    } else {
-      sections = state.property.groups
-        .filter((g) => g.photoIds.length > 0)
-        .map((g) => ({
-          id: g.id,
-          name: g.name,
-          entries: g.photoIds
-            .map((pid) => {
-              const photo = state.photos.get(pid);
-              return photo ? { photo, source: g } : null;
-            })
-            .filter(Boolean),
-        }));
-      for (const room of state.property.rooms || []) {
-        const entries = (room.photoIds || [])
-          .map((pid) => {
-            const photo = state.photos.get(pid);
-            return photo ? { photo, source: room } : null;
-          })
-          .filter(Boolean);
-        if (!entries.length) continue;
-        sections.push({
-          id: `room-${room.id}`,
-          name: `${room.name} (${room.habitability})`,
-          entries,
-        });
-      }
-    }
-
-    // Contents list.
-    let totalPhotos = 0;
-    let tocHtml = "<ul>";
-    for (const s of sections) {
-      const n = s.entries.length;
-      totalPhotos += n;
-      tocHtml += `<li><a href="#g-${escapeHtml(s.id)}">${escapeHtml(s.name)}</a> <span class="count">${n} photo${n === 1 ? "" : "s"}</span></li>`;
-    }
-    tocHtml += "</ul>";
-
-    // Helper: build one figure's HTML.
-    const figureHtml = (photo, source, index) => {
-      const path = photoPaths.get(photo.id) || "";
-      const building = photoBuildingOf(photo);
-      const hrefEsc = escapeHtml(path);
-      const label = `${index}. ${photo.label || source.name}`;
-      const labelEsc = escapeHtml(label);
-      const tagClass = building === DEFAULT_BUILDING ? "tag tag-main" : "tag tag-ext";
-      const defectClass = photo.defect ? " has-defect" : "";
-      const defectBadge = photo.defect ? `<span class="tag tag-defect">Defect</span> ` : "";
-      const roomTagBadge = photo.roomTag
-        ? `<span class="tag tag-room">${escapeHtml(photo.roomTag)}</span> `
-        : "";
-      let html = `<figure class="fig${defectClass}">`;
-      html += `<a href="${hrefEsc}" target="_blank" rel="noopener"><img src="${hrefEsc}" alt="${labelEsc}" loading="lazy"></a>`;
-      html += `<figcaption><div class="label">${defectBadge}${roomTagBadge}<span class="${tagClass}">${escapeHtml(building)}</span> ${labelEsc}</div>`;
-      if (photo.source === "upload") {
-        html += `<div class="meta-line">Date taken: ${escapeHtml(fmtIso(photo.takenAt))}</div>`;
-        html += `<div class="meta-line">Location taken: ${escapeHtml(photo.gps ? formatGps(photo.gps) : "not in photo metadata")}</div>`;
-        html += `<div class="meta-line">Uploaded: ${escapeHtml(fmtIso(photo.uploadedAt))}</div>`;
-      } else {
-        const parts = [];
-        if (photo.takenAt) parts.push(new Date(photo.takenAt).toLocaleString());
-        if (photo.gps) parts.push(formatGps(photo.gps));
-        if (parts.length) html += `<div class="meta-line">${escapeHtml(parts.join("  ·  "))}</div>`;
-      }
-      html += `<a class="open-link" href="${hrefEsc}" target="_blank" rel="noopener">Open photo →</a>`;
-      html += `</figcaption></figure>`;
-      return html;
+    // Flatten every photo into a lean data record for the embedded viewer.
+    // Groups list their photoIds in display order so filtering keeps the
+    // same ordering the user is used to in the app.
+    const photoData = {};
+    const groups = [];
+    const pushSection = (id, name, src, entries) => {
+      if (!entries.length) return;
+      groups.push({ id, name, photoIds: entries.map((e) => e.id) });
+    };
+    const addPhoto = (photo, sourceName) => {
+      const path = photoPaths.get(photo.id);
+      if (!path) return null;
+      const takenIso = photo.takenAt || photo.uploadedAt || null;
+      photoData[photo.id] = {
+        src: path,
+        label: photo.label || "",
+        building: photoBuildingOf(photo),
+        roomTag: photo.roomTag || "",
+        defect: !!photo.defect,
+        source: sourceName,
+        dateStr: takenIso ? new Date(takenIso).toLocaleString() : "",
+        gpsText: photo.gps ? formatGps(photo.gps) : "",
+        uploaded: photo.source === "upload",
+      };
+      return { id: photo.id };
     };
 
-    // Section bodies with photo figures.
-    let sectionsHtml = "";
-    for (const s of sections) {
-      sectionsHtml += `<section id="g-${escapeHtml(s.id)}" class="group"><h2>${escapeHtml(s.name)}</h2>`;
-      const useClusters = layout === "tag";
-      if (useClusters) {
-        // Cluster the section's photos by their source group so the reader still
-        // sees a group heading above each cluster of photos.
-        const byGroup = new Map();
-        const order = [];
-        for (const entry of s.entries) {
-          const gid = entry.source.id;
-          if (!byGroup.has(gid)) {
-            byGroup.set(gid, { group: entry.source, items: [] });
-            order.push(gid);
-          }
-          byGroup.get(gid).items.push(entry);
-        }
-        for (const gid of order) {
-          const { group: src, items } = byGroup.get(gid);
-          sectionsHtml += `<div class="tag-cluster-html"><h3 class="tag-cluster-title-html">${escapeHtml(src.name)} <span class="tag-cluster-count-html">${items.length} photo${items.length === 1 ? "" : "s"}</span></h3><div class="photos">`;
-          let index = 0;
-          for (const { photo, source } of items) {
-            index += 1;
-            sectionsHtml += figureHtml(photo, source, index);
-          }
-          sectionsHtml += `</div></div>`;
-        }
-      } else {
-        sectionsHtml += `<div class="photos">`;
-        let index = 0;
-        for (const { photo, source } of s.entries) {
-          index += 1;
-          sectionsHtml += figureHtml(photo, source, index);
-        }
-        sectionsHtml += `</div>`;
-      }
-      sectionsHtml += `</section>`;
+    for (const g of state.property.groups || []) {
+      const entries = (g.photoIds || [])
+        .map((pid) => {
+          const p = state.photos.get(pid);
+          return p ? addPhoto(p, g.name) : null;
+        })
+        .filter(Boolean);
+      pushSection(`g-${g.id}`, g.name, g, entries);
+    }
+    for (const room of state.property.rooms || []) {
+      const entries = (room.photoIds || [])
+        .map((pid) => {
+          const p = state.photos.get(pid);
+          return p ? addPhoto(p, `${room.name} (${room.habitability})`) : null;
+        })
+        .filter(Boolean);
+      pushSection(`r-${room.id}`, `${room.name} (${room.habitability})`, room, entries);
     }
 
-    // Top-of-page link to the sibling layout.
-    const switchHtml = otherHref
-      ? `<p class="layout-switch">Layout: <strong>${layout === "tag" ? "by tag" : "by group"}</strong> · <a href="${escapeHtml(otherHref)}">Switch to ${escapeHtml(otherLabel || "other layout")}</a></p>`
-      : "";
+    const viewerData = {
+      title,
+      meta: {
+        assessor: meta.assessor || "",
+        address: meta.address || "",
+        ref: meta.ref || "",
+        date: meta.date || "",
+        generated: new Date().toLocaleString(),
+      },
+      groups,
+      photos: photoData,
+    };
+
+    // JSON can contain sequences that would close the <script> tag
+    // prematurely if inserted raw. Escape the slashes that start tags.
+    const dataJson = JSON.stringify(viewerData).replace(/</g, "\\u003c");
 
     const css = `
 *{box-sizing:border-box}
-html,body{margin:0;padding:0;background:#fbf9f4;color:#14120f;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:15px;line-height:1.45}
-.wrap{max-width:980px;margin:0 auto;padding:16px}
-header.cover{background:#121212;color:#fff;padding:18px 20px;border-radius:12px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,0.05);border:1px solid #121212}
-header.cover h1{margin:0 0 8px;font-size:1.35rem;color:#f59e0b}
-.layout-switch{background:#fff;border:1px solid #ece6d9;border-radius:10px;padding:10px 14px;margin:0 0 16px;font-size:0.88rem;color:#6b6158}
-.layout-switch strong{color:#14120f;margin:0 4px}
-.layout-switch a{color:#b45309;text-decoration:underline}
-.cover dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:6px 0 0;font-size:0.9rem}
-.cover dt{font-weight:600;opacity:0.85}
-.cover dd{margin:0}
-.toc,section.group{background:#fff;border:1px solid #ece6d9;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,0.04)}
-.toc h2,section.group h2{margin:0 0 10px;font-size:1.1rem}
-.toc ul{list-style:none;padding:0;margin:0}
-.toc li{padding:3px 0}
-.toc .toc-section{font-weight:700;margin-top:6px}
-.toc .toc-section-name{display:inline-block;margin-bottom:4px}
-.toc .toc-section > ul{margin:4px 0 6px;padding-left:14px;font-weight:normal}
-.toc a{color:#b45309;text-decoration:underline}
-.toc .count{color:#6b6158;font-size:0.85rem;margin-left:6px}
-.total{margin:10px 0 0;font-weight:700;font-size:0.95rem;color:#78350f}
-.photos{display:grid;grid-template-columns:1fr;gap:16px}
-.tag-cluster-html{margin:12px 0 18px}
-.tag-cluster-html:first-of-type{margin-top:0}
-.tag-cluster-title-html{margin:0 0 10px;font-size:0.85rem;font-weight:700;color:#14120f;text-transform:uppercase;letter-spacing:0.5px;padding:0 0 4px;border-bottom:2px solid #f59e0b;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-.tag-cluster-count-html{font-weight:500;color:#6b6158;font-size:0.78rem;text-transform:none;letter-spacing:normal}
-@media (min-width:720px){.photos{grid-template-columns:1fr 1fr}}
-figure{margin:0;border:1px solid #ece6d9;border-radius:10px;overflow:hidden;background:#fff;display:flex;flex-direction:column}
-figure img{display:block;width:100%;height:auto;background:#000}
-figcaption{padding:10px 12px;font-size:0.88rem}
-.label{font-weight:600;margin-bottom:4px}
-.tag{display:inline-block;font-size:0.7rem;font-weight:700;padding:1px 6px;border-radius:999px;margin-right:6px;vertical-align:middle;letter-spacing:0.3px}
-.tag-main{background:#fff5df;color:#78350f}
-.tag-ext{background:#fde7b8;color:#7a4a00}
-.tag-defect{background:#fdecec;color:#b22d2d;border:1px solid #f3c1c1}
-.tag-room{background:#14120f;color:#f59e0b;border:1px solid #14120f}
-figure.has-defect{border-color:#f3c1c1;box-shadow:0 0 0 1px #f3c1c1 inset}
-figure.has-defect .label{color:#b22d2d}
-.meta-line{color:#6b6158;font-size:0.82rem;margin:2px 0}
-.open-link{display:inline-block;margin-top:6px;color:#b45309;text-decoration:underline;font-size:0.82rem}
+html,body{margin:0;padding:0;height:100%;background:#0f0f0f;color:#f4f2ed;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;overflow:hidden}
+body{display:flex;flex-direction:column}
+.app{position:fixed;inset:0;display:grid;grid-template-columns:280px 1fr;grid-template-rows:auto 1fr;grid-template-areas:"sidebar stage" "sidebar filmstrip";background:#0f0f0f}
+.sidebar{grid-area:sidebar;background:#161616;border-right:1px solid #262626;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.sidebar-top{padding:16px 18px 12px;padding-top:calc(16px + env(safe-area-inset-top));border-bottom:1px solid #262626}
+.sidebar-top h1{margin:0;font-size:1.05rem;color:#f59e0b;font-weight:700;letter-spacing:0.2px}
+.sidebar-top dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:10px 0 0;font-size:0.78rem;color:#b9b4ab}
+.sidebar-top dt{font-weight:600;color:#8e8a82}
+.sidebar-top dd{margin:0}
+.sections{flex:1 1 auto;overflow-y:auto;padding:8px 10px}
+.section-head{margin:14px 0 6px;padding:0 8px;font-size:0.7rem;color:#7a7670;font-weight:700;letter-spacing:0.6px;text-transform:uppercase}
+.section-head:first-child{margin-top:4px}
+.section-item{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border-radius:8px;border:1px solid transparent;background:transparent;color:#e2ddd3;font:inherit;font-size:0.9rem;cursor:pointer;text-align:left}
+.section-item:hover{background:#1f1f1f}
+.section-item.is-active{background:#2b2410;border-color:#f59e0b;color:#f59e0b}
+.section-item .count{color:#7a7670;font-size:0.78rem;font-weight:600}
+.section-item.is-active .count{color:#f59e0b}
+.section-item.is-danger .count{color:#ff8a8a}
+.section-item.is-danger.is-active{background:#3a1515;border-color:#ff6b6b;color:#ff6b6b}
+.stage{grid-area:stage;position:relative;display:flex;align-items:center;justify-content:center;min-height:0;padding:20px;background:radial-gradient(ellipse at center,#1b1b1b 0%,#0f0f0f 80%)}
+.stage-img-wrap{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+.main-img{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px;background:#000;box-shadow:0 12px 60px rgba(0,0,0,0.6)}
+.stage-empty{color:#7a7670;font-size:0.95rem;text-align:center}
+.nav-btn{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.18);width:48px;height:48px;border-radius:999px;font-size:1.8rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:5}
+.nav-btn:hover{background:rgba(255,255,255,0.18)}
+.nav-btn:disabled{opacity:0.25;cursor:not-allowed}
+.prev{left:18px}
+.next{right:18px}
+.badges{position:absolute;top:18px;left:18px;display:flex;gap:6px;flex-wrap:wrap;max-width:calc(100% - 36px);z-index:4}
+.badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;background:rgba(0,0,0,0.55);color:#fff;border:1px solid rgba(255,255,255,0.15);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.badge-defect{background:rgba(178,45,45,0.35);color:#ffd4d4;border-color:rgba(255,107,107,0.55)}
+.badge-tag{background:rgba(245,158,11,0.2);color:#f8c464;border-color:rgba(245,158,11,0.45)}
+.badge-building{background:rgba(255,255,255,0.12);color:#fff}
+.caption{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);padding:8px 14px;border-radius:10px;background:rgba(0,0,0,0.55);color:#e7e3db;font-size:0.82rem;max-width:90%;text-align:center;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:4}
+.caption .counter{color:#9a948a;margin-left:8px;font-weight:600}
+.filmstrip{grid-area:filmstrip;display:flex;gap:6px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:#121212;border-top:1px solid #262626;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity;scrollbar-width:thin;scrollbar-color:#2f2f2f #121212}
+.filmstrip::-webkit-scrollbar{height:8px}
+.filmstrip::-webkit-scrollbar-thumb{background:#2f2f2f;border-radius:999px}
+.film-thumb{flex:0 0 auto;width:88px;height:66px;padding:0;border:2px solid transparent;border-radius:6px;background:#000;cursor:pointer;overflow:hidden;position:relative;scroll-snap-align:center;transition:border-color 0.15s ease}
+.film-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.film-thumb:hover{border-color:#4a4a4a}
+.film-thumb.is-active{border-color:#f59e0b;box-shadow:0 0 0 2px rgba(245,158,11,0.25)}
+.film-thumb.has-defect::after{content:"";position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:#ff6b6b;box-shadow:0 0 0 2px rgba(0,0,0,0.6)}
+.sidebar-toggle{position:absolute;top:calc(12px + env(safe-area-inset-top));left:12px;width:40px;height:40px;border-radius:999px;background:rgba(0,0,0,0.55);color:#fff;border:1px solid rgba(255,255,255,0.2);font-size:1.1rem;cursor:pointer;z-index:30;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.sidebar-toggle.show{display:flex}
+@media (max-width:900px){
+  .app{grid-template-columns:1fr;grid-template-areas:"stage" "filmstrip"}
+  .sidebar{position:absolute;top:0;bottom:0;left:0;width:84%;max-width:320px;transform:translateX(-100%);transition:transform 0.22s ease;z-index:20;box-shadow:0 0 40px rgba(0,0,0,0.6)}
+  body.sidebar-open .sidebar{transform:translateX(0)}
+  body.sidebar-open::before{content:"";position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:15}
+  .sidebar-toggle{display:flex}
+  .stage{padding:56px 10px 10px}
+  .nav-btn{width:42px;height:42px;font-size:1.5rem}
+  .prev{left:10px}
+  .next{right:10px}
+  .badges{top:54px;left:10px}
+  .caption{bottom:10px}
+}
+@media (max-width:520px){
+  .film-thumb{width:68px;height:52px}
+  .filmstrip{padding:8px 10px calc(8px + env(safe-area-inset-bottom))}
+}
 `;
 
-    const title = state.property.name || meta.address || "Photo Evidence";
+    const js = `
+(function(){
+  var DATA = __VIEWER_DATA__;
+  var state = { filter: "all", idx: 0, photoIds: [] };
+
+  function allPhotoIds() {
+    var ids = [];
+    for (var i = 0; i < DATA.groups.length; i++) {
+      var g = DATA.groups[i];
+      for (var j = 0; j < g.photoIds.length; j++) ids.push(g.photoIds[j]);
+    }
+    return ids;
+  }
+  function defectIds() {
+    return allPhotoIds().filter(function (id) { return DATA.photos[id] && DATA.photos[id].defect; });
+  }
+  function groupIds(id) {
+    for (var i = 0; i < DATA.groups.length; i++) if (DATA.groups[i].id === id) return DATA.groups[i].photoIds.slice();
+    return [];
+  }
+
+  var el = {};
+  function $(sel) { return document.querySelector(sel); }
+
+  function renderSidebar() {
+    el.sections.innerHTML = "";
+    var items = [
+      { id: "all", name: "All photos", count: allPhotoIds().length, kind: "special" },
+      { id: "defects", name: "Defects only", count: defectIds().length, kind: "danger" },
+    ];
+    el.sections.appendChild(header("Overview"));
+    for (var i = 0; i < 2; i++) el.sections.appendChild(itemBtn(items[i]));
+    var sections = DATA.groups.filter(function (g) { return g.photoIds.length > 0; });
+    if (sections.length) {
+      el.sections.appendChild(header("By room / group"));
+      for (var k = 0; k < sections.length; k++) {
+        var g = sections[k];
+        el.sections.appendChild(itemBtn({ id: g.id, name: g.name, count: g.photoIds.length, kind: "group" }));
+      }
+    }
+  }
+  function header(txt) {
+    var h = document.createElement("div");
+    h.className = "section-head";
+    h.textContent = txt;
+    return h;
+  }
+  function itemBtn(item) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "section-item" + (state.filter === item.id ? " is-active" : "") + (item.kind === "danger" ? " is-danger" : "");
+    b.dataset.filter = item.id;
+    var n = document.createElement("span");
+    n.textContent = item.name;
+    var c = document.createElement("span");
+    c.className = "count";
+    c.textContent = String(item.count);
+    b.appendChild(n); b.appendChild(c);
+    b.addEventListener("click", function () { setFilter(item.id); closeSidebar(); });
+    return b;
+  }
+
+  function setFilter(f) {
+    state.filter = f;
+    state.idx = 0;
+    if (f === "all") state.photoIds = allPhotoIds();
+    else if (f === "defects") state.photoIds = defectIds();
+    else state.photoIds = groupIds(f);
+    renderSidebar();
+    renderStage();
+    renderFilmstrip();
+  }
+
+  function renderStage() {
+    var id = state.photoIds[state.idx];
+    if (!id) {
+      el.img.removeAttribute("src");
+      el.img.alt = "";
+      el.imgWrap.innerHTML = '<div class="stage-empty">No photos match this filter.</div>';
+      el.caption.textContent = "";
+      el.badges.innerHTML = "";
+      el.prev.disabled = true; el.next.disabled = true;
+      return;
+    }
+    if (!el.imgWrap.querySelector("img")) el.imgWrap.innerHTML = "";
+    if (!el.imgWrap.contains(el.img)) {
+      el.imgWrap.innerHTML = "";
+      el.imgWrap.appendChild(el.img);
+    }
+    var p = DATA.photos[id];
+    el.img.src = p.src;
+    el.img.alt = p.label || "";
+    el.badges.innerHTML = "";
+    if (p.defect) el.badges.appendChild(badge("Defect", "badge badge-defect"));
+    if (p.roomTag) el.badges.appendChild(badge(p.roomTag, "badge badge-tag"));
+    if (p.building) el.badges.appendChild(badge(p.building, "badge badge-building"));
+
+    var pieces = [];
+    if (p.source) pieces.push(p.source);
+    if (p.label) pieces.push(p.label);
+    if (p.dateStr) pieces.push(p.dateStr);
+    if (p.gpsText) pieces.push(p.gpsText);
+    el.caption.innerHTML = "";
+    var capText = document.createTextNode(pieces.join(" · "));
+    el.caption.appendChild(capText);
+    var counter = document.createElement("span");
+    counter.className = "counter";
+    counter.textContent = "(" + (state.idx + 1) + "/" + state.photoIds.length + ")";
+    el.caption.appendChild(counter);
+
+    el.prev.disabled = state.idx === 0;
+    el.next.disabled = state.idx === state.photoIds.length - 1;
+  }
+
+  function badge(text, cls) {
+    var s = document.createElement("span");
+    s.className = cls;
+    s.textContent = text;
+    return s;
+  }
+
+  function renderFilmstrip() {
+    el.filmstrip.innerHTML = "";
+    for (var i = 0; i < state.photoIds.length; i++) {
+      (function (i) {
+        var id = state.photoIds[i];
+        var p = DATA.photos[id];
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "film-thumb" + (i === state.idx ? " is-active" : "") + (p.defect ? " has-defect" : "");
+        var img = document.createElement("img");
+        img.src = p.src; img.loading = "lazy"; img.alt = "";
+        b.appendChild(img);
+        b.addEventListener("click", function () { state.idx = i; renderStage(); highlightFilmstrip(); });
+        el.filmstrip.appendChild(b);
+      })(i);
+    }
+    scrollActiveIntoView();
+  }
+  function highlightFilmstrip() {
+    var thumbs = el.filmstrip.querySelectorAll(".film-thumb");
+    for (var i = 0; i < thumbs.length; i++) thumbs[i].classList.toggle("is-active", i === state.idx);
+    scrollActiveIntoView();
+  }
+  function scrollActiveIntoView() {
+    var a = el.filmstrip.querySelector(".is-active");
+    if (a && a.scrollIntoView) a.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }
+
+  function step(d) {
+    var n = state.photoIds.length;
+    if (!n) return;
+    var next = state.idx + d;
+    if (next < 0 || next >= n) return;
+    state.idx = next;
+    renderStage(); highlightFilmstrip();
+  }
+
+  function closeSidebar() { document.body.classList.remove("sidebar-open"); }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    el.sections = $(".sections");
+    el.stage = $(".stage");
+    el.imgWrap = $(".stage-img-wrap");
+    el.img = $(".main-img");
+    el.caption = $(".caption");
+    el.badges = $(".badges");
+    el.filmstrip = $(".filmstrip");
+    el.prev = $(".prev");
+    el.next = $(".next");
+
+    el.prev.addEventListener("click", function () { step(-1); });
+    el.next.addEventListener("click", function () { step(1); });
+    $(".sidebar-toggle").addEventListener("click", function () { document.body.classList.toggle("sidebar-open"); });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowLeft") step(-1);
+      else if (e.key === "ArrowRight") step(1);
+      else if (e.key === "Home") { state.idx = 0; renderStage(); highlightFilmstrip(); }
+      else if (e.key === "End") { state.idx = state.photoIds.length - 1; renderStage(); highlightFilmstrip(); }
+      else if (e.key === "Escape") closeSidebar();
+    });
+
+    // Touch-swipe support on the stage.
+    var startX = 0, startY = 0, dragging = false;
+    el.stage.addEventListener("touchstart", function (e) {
+      if (!e.touches || e.touches.length !== 1) return;
+      startX = e.touches[0].clientX; startY = e.touches[0].clientY; dragging = true;
+    }, { passive: true });
+    el.stage.addEventListener("touchend", function (e) {
+      if (!dragging) return; dragging = false;
+      var t = e.changedTouches[0];
+      var dx = t.clientX - startX; var dy = t.clientY - startY;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) step(dx > 0 ? -1 : 1);
+    });
+
+    setFilter("all");
+  });
+})();
+`;
+
+    const safe = (v) => escapeHtml(v || "—");
     return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)} — Photo Evidence</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>${escapeHtml(title)} — Retrofit Photos</title>
 <style>${css}</style>
 </head>
 <body>
-<div class="wrap">
-<header class="cover">
-<h1>${escapeHtml(title)}</h1>
-<dl>
-<dt>Assessor</dt><dd>${escapeHtml(meta.assessor || "—")}</dd>
-<dt>Property</dt><dd>${escapeHtml(meta.address || "—")}</dd>
-<dt>Job ref</dt><dd>${escapeHtml(meta.ref || "—")}</dd>
-<dt>Date</dt><dd>${escapeHtml(meta.date || "—")}</dd>
-<dt>Generated</dt><dd>${escapeHtml(new Date().toLocaleString())}</dd>
-</dl>
-</header>
-${switchHtml}
-<nav class="toc"><h2>Contents</h2>${tocHtml}<p class="total">Total photos: ${totalPhotos}</p></nav>
-<main>${sectionsHtml}</main>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <h1>${escapeHtml(title)}</h1>
+      <dl>
+        <dt>Assessor</dt><dd>${safe(meta.assessor)}</dd>
+        <dt>Property</dt><dd>${safe(meta.address)}</dd>
+        <dt>Job ref</dt><dd>${safe(meta.ref)}</dd>
+        <dt>Date</dt><dd>${safe(meta.date)}</dd>
+        <dt>Generated</dt><dd>${escapeHtml(new Date().toLocaleString())}</dd>
+      </dl>
+    </div>
+    <nav class="sections" aria-label="Photo filters"></nav>
+  </aside>
+  <button class="sidebar-toggle show" type="button" aria-label="Open filters">☰</button>
+  <div class="stage">
+    <button class="nav-btn prev" type="button" aria-label="Previous">&#x2039;</button>
+    <div class="stage-img-wrap"><img class="main-img" alt=""></div>
+    <button class="nav-btn next" type="button" aria-label="Next">&#x203A;</button>
+    <div class="badges"></div>
+    <div class="caption"></div>
+  </div>
+  <div class="filmstrip" aria-label="Photo filmstrip"></div>
 </div>
+<script>${js.replace("__VIEWER_DATA__", dataJson)}</script>
 </body>
 </html>`;
   }
@@ -3483,28 +3625,12 @@ ${switchHtml}
           }
         }
 
-        // HTML indices only go into the single-file (compressed) export —
-        // the chunked originals don't cleanly split into self-contained
-        // indices and users typically use the compressed ZIP for the
-        // browseable report anyway.
+        // A single self-contained viewer (filter + filmstrip + big photo)
+        // ships with the compressed ZIP. It covers what the old by-group
+        // and by-tag HTML indices used to do and is much nicer to browse.
         if (compress) {
           try {
-            zip.file(
-              "index.html",
-              buildHtmlIndex(photoPaths, {
-                layout: "group",
-                otherHref: "index-by-tag.html",
-                otherLabel: "by tag (Main / Ext1–4)",
-              })
-            );
-            zip.file(
-              "index-by-tag.html",
-              buildHtmlIndex(photoPaths, {
-                layout: "tag",
-                otherHref: "index.html",
-                otherLabel: "by group",
-              })
-            );
+            zip.file("index.html", buildHtmlIndex(photoPaths));
           } catch (err) {
             console.warn("HTML index generation failed.", err);
           }
