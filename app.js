@@ -3428,6 +3428,8 @@ ${switchHtml}
   wireMetaInputs();
 
   // -------------------- Boot --------------------
+  const GPS_INTRO_KEY = "retrofit-photos:gps-intro-seen";
+
   async function autoRequestGps() {
     if (!("geolocation" in navigator)) {
       setGpsStatus("err", "No GPS support");
@@ -3443,18 +3445,18 @@ ${switchHtml}
       }
     }
     if (state_perm === "denied") {
-      setGpsStatus("err", "GPS blocked");
-      alert(
-        "Location is currently blocked for this site.\n\n" +
-          "Photos won't carry a GPS stamp until you allow location in your browser settings and tap Enable GPS in the header."
-      );
+      // Don't block boot with an alert — the header dot shows it's off
+      // and the Enable GPS button can be tapped to retry.
+      setGpsStatus("err", "GPS off");
       return;
     }
-    if (state_perm !== "granted") {
-      alert(
-        "Photo Evidence uses your device GPS to stamp each photo with a location.\n\n" +
-          "When prompted by the browser, choose Allow. You can change this any time from the Enable GPS button in the header."
-      );
+    if (state_perm !== "granted" && !localStorage.getItem(GPS_INTRO_KEY)) {
+      // One-off, non-blocking nudge the very first time the user opens
+      // the app. A toast instead of alert() so the main thread keeps
+      // running — important on iOS PWAs where a blocking modal during
+      // heavy work can contribute to the tab being reclaimed.
+      toast("GPS will stamp each photo — allow when prompted.");
+      localStorage.setItem(GPS_INTRO_KEY, "1");
     }
     enableGps();
   }
