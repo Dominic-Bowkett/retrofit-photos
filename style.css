@@ -1241,7 +1241,9 @@ input[type="date"]:focus {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease, transform 0.2s ease;
-  z-index: 50;
+  /* Above dialogs (80) and the collapse-all pill (45) so status messages
+     triggered from within a dialog (e.g. "API key works.") stay visible. */
+  z-index: 200;
 }
 
 .collapse-fab {

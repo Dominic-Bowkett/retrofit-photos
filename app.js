@@ -4013,6 +4013,17 @@ body{display:flex;flex-direction:column}
   .film-thumb{width:68px;height:52px}
   .filmstrip{padding:8px 10px calc(8px + env(safe-area-inset-bottom))}
 }
+.nojs-fallback{padding:20px;max-width:980px;margin:0 auto;color:#e2ddd3;font-family:inherit}
+.nojs-fallback h2{color:#f59e0b;margin:0 0 12px}
+.nojs-fallback section{margin:0 0 24px}
+.nojs-fallback h3{font-size:1.05rem;margin:0 0 10px;color:#f4f2ed;display:flex;align-items:baseline;gap:8px}
+.nojs-fallback .nojs-count{font-size:0.82rem;color:#9a948a;font-weight:500}
+.nojs-fallback .nojs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.nojs-fallback .nojs-grid a{display:block;background:#000;border:1px solid #262626;border-radius:6px;overflow:hidden;aspect-ratio:4/3}
+.nojs-fallback .nojs-grid img{width:100%;height:100%;object-fit:cover;display:block}
+body.js-ready .nojs-fallback{display:none}
+body.js-ready .app{display:grid}
+body:not(.js-ready) .app{display:none}
 `;
 
     const js = `
@@ -4239,6 +4250,10 @@ body{display:flex;flex-direction:column}
   function closeSidebar() { document.body.classList.remove("sidebar-open"); }
 
   document.addEventListener("DOMContentLoaded", function () {
+    // Flag body so the CSS fallback (.nojs-fallback) is hidden and the
+    // viewer (.app) becomes visible. If this line never runs, the static
+    // fallback is what the user sees.
+    document.body.classList.add("js-ready");
     el.sections = $(".sections");
     el.stage = $(".stage");
     el.imgWrap = $(".stage-img-wrap");
@@ -4281,11 +4296,31 @@ body{display:flex;flex-direction:column}
 `;
 
     const safe = (v) => escapeHtml(v || "—");
+
+    // Static no-JS fallback: every photo gets an anchor-wrapped <img>
+    // grouped by section. Kept in the DOM so it renders in viewers that
+    // don't execute JS (some iOS ZIP previewers) or if the viewer JS
+    // fails mid-boot. CSS hides it the moment JS sets body.js-ready.
+    let nojsFallback = '<div class="nojs-fallback"><h2>Photos</h2>';
+    for (const g of groups) {
+      if (!g.photoIds.length) continue;
+      nojsFallback += `<section><h3>${escapeHtml(g.name)} <span class="nojs-count">${g.photoIds.length}</span></h3><div class="nojs-grid">`;
+      for (const pid of g.photoIds) {
+        const p = photoData[pid];
+        if (!p) continue;
+        const hrefEsc = escapeHtml(p.src);
+        const altEsc = escapeHtml(p.label || "");
+        nojsFallback += `<a href="${hrefEsc}" target="_blank" rel="noopener"><img src="${hrefEsc}" alt="${altEsc}" loading="lazy"></a>`;
+      }
+      nojsFallback += `</div></section>`;
+    }
+    nojsFallback += '</div>';
     return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<base href="./">
 <title>${escapeHtml(title)} — Retrofit Photos</title>
 <style>${css}</style>
 </head>
@@ -4315,6 +4350,7 @@ body{display:flex;flex-direction:column}
   </div>
   <div class="filmstrip" aria-label="Photo filmstrip"></div>
 </div>
+${nojsFallback}
 <script>${js.replace("__VIEWER_DATA__", dataJson)}</script>
 </body>
 </html>`;
@@ -4746,15 +4782,17 @@ body{display:flex;flex-direction:column}
     if (state.view === "analysis") renderGroups();
   }
 
-  // Populate the preset dropdown once; enable/disable per photo.
-  if (els.lightboxAnalysePreset && !els.lightboxAnalysePreset.options.length) {
+  // Populate the preset dropdown. This wiring block runs once at boot,
+  // so no idempotency guard is needed — and the HTML ships with a
+  // single placeholder option, so an `options.length` check would skip
+  // the append entirely.
+  if (els.lightboxAnalysePreset) {
     for (const preset of ANALYSIS_PRESETS) {
       const o = document.createElement("option");
       o.value = preset.id;
       o.textContent = preset.label;
       els.lightboxAnalysePreset.appendChild(o);
     }
-    // Keep the "Analyse as…" placeholder at index 0; inserted in the HTML.
   }
 
   if (els.lightboxAnalyseRun) {
