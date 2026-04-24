@@ -3884,8 +3884,12 @@
             };
           })
         : [];
+      // "./" prefix keeps the path explicitly relative — some iOS /
+      // quick-look style ZIP previewers resolve bare relative paths
+      // against the wrong base.
+      const relSrc = path.startsWith("./") || path.startsWith("/") ? path : "./" + path;
       photoData[photo.id] = {
-        src: path,
+        src: relSrc,
         label: photo.label || "",
         building: photoBuildingOf(photo),
         roomTag: photo.roomTag || "",
@@ -4308,6 +4312,7 @@ body:not(.js-ready) .app{display:none}
       for (const pid of g.photoIds) {
         const p = photoData[pid];
         if (!p) continue;
+        // p.src already has the "./" prefix applied in addPhoto.
         const hrefEsc = escapeHtml(p.src);
         const altEsc = escapeHtml(p.label || "");
         nojsFallback += `<a href="${hrefEsc}" target="_blank" rel="noopener"><img src="${hrefEsc}" alt="${altEsc}" loading="lazy"></a>`;
