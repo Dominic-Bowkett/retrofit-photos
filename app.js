@@ -83,6 +83,13 @@
   // the jsPDF doc itself).
   const PDF_MAX_DIMENSION = 1400;
   const PDF_JPEG_QUALITY = 0.6;
+  // ZIP export: captures straight from an iPhone can be 5000 px × quality 1.0.
+  // At 300+ photos a full-fidelity in-memory ZIP blows past the iOS PWA
+  // memory ceiling and the tab is killed mid-export. Re-encode each photo
+  // here to keep peak memory an order of magnitude smaller while staying
+  // above the resolution a DEA report needs.
+  const ZIP_MAX_DIMENSION = 2200;
+  const ZIP_JPEG_QUALITY = 0.82;
 
   // -------------------- IndexedDB --------------------
   const IDB = (() => {
@@ -398,6 +405,25 @@
       return canvas.toDataURL("image/jpeg", PDF_JPEG_QUALITY);
     } catch (err) {
       console.warn("PDF re-encode failed; embedding original.", err);
+      return dataUrl;
+    }
+  }
+
+  async function reencodeForZip(dataUrl) {
+    try {
+      const img = await loadImageFromDataUrl(dataUrl);
+      const longest = Math.max(img.naturalWidth, img.naturalHeight);
+      const scale = longest > ZIP_MAX_DIMENSION ? ZIP_MAX_DIMENSION / longest : 1;
+      const w = Math.max(1, Math.round(img.naturalWidth * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      return canvas.toDataURL("image/jpeg", ZIP_JPEG_QUALITY);
+    } catch (err) {
+      console.warn("ZIP re-encode failed; zipping original bytes.", err);
       return dataUrl;
     }
   }
@@ -2186,13 +2212,16 @@
     ];
   }
 
-  function buildExifDataUrl(photo) {
-    if (typeof piexif === "undefined") return photo.dataUrl;
+  // Build an EXIF blob for a photo (date + optional GPS). Null if the piexif
+  // library isn't loaded. Shared by the share-sheet, share-per-photo, and
+  // ZIP paths so date/GPS survive re-encoding.
+  function exifStringFor(photo) {
+    if (typeof piexif === "undefined") return null;
     try {
       const dt = exifDateTime(photo.takenAt || new Date().toISOString());
       const zeroth = {
         [piexif.ImageIFD.DateTime]: dt,
-        [piexif.ImageIFD.Software]: "Photo Evidence",
+        [piexif.ImageIFD.Software]: "Retrofit Photos",
       };
       const exif = {
         [piexif.ExifIFD.DateTimeOriginal]: dt,
@@ -2216,12 +2245,31 @@
           [d.getUTCSeconds(), 1],
         ];
       }
-      const exifStr = piexif.dump({ "0th": zeroth, Exif: exif, GPS: gps });
-      return piexif.insert(exifStr, photo.dataUrl);
+      return piexif.dump({ "0th": zeroth, Exif: exif, GPS: gps });
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Inject EXIF into an arbitrary JPEG data URL (e.g. a re-encoded smaller
+  // copy). Upload-source photos keep their original EXIF if available.
+  function insertExifInto(dataUrl, photo) {
+    if (typeof piexif === "undefined") return dataUrl;
+    try {
+      if (photo.source === "upload" && photo.rawExif) {
+        return piexif.insert(photo.rawExif, dataUrl);
+      }
+      const exifStr = exifStringFor(photo);
+      if (!exifStr) return dataUrl;
+      return piexif.insert(exifStr, dataUrl);
     } catch (err) {
       console.warn("EXIF injection failed; using plain JPEG.", err);
-      return photo.dataUrl;
+      return dataUrl;
     }
+  }
+
+  function buildExifDataUrl(photo) {
+    return insertExifInto(photo.dataUrl, photo);
   }
 
   function dataUrlToBytes(dataUrl) {
@@ -3159,9 +3207,13 @@ ${switchHtml}
           if (!photo) continue;
           index += 1;
           done += 1;
-          const dataUrl =
-            photo.source === "upload" ? photo.dataUrl : buildExifDataUrl(photo);
+          // Re-encode to ~2200 px / q0.82 so iOS PWAs with hundreds of
+          // originals don't blow their process memory budget during the
+          // zip step. EXIF (date / GPS) is re-stamped after the re-encode.
+          let dataUrl = await reencodeForZip(photo.dataUrl);
+          dataUrl = insertExifInto(dataUrl, photo);
           const bytes = dataUrlToBytes(dataUrl);
+          dataUrl = null; // drop the string reference immediately
           const stamp = photo.takenAt || photo.uploadedAt || new Date().toISOString();
           const defectPrefix = photo.defect ? "DEFECT_" : "";
           const tagPrefix = room && photo.roomTag ? `${slugify(photo.roomTag)}_` : "";
@@ -3176,17 +3228,11 @@ ${switchHtml}
         }
       }
 
-      // A single PDF (group layout) is enough — the HTML indices cover the
-      // tag view. Building both PDFs in one pass was the biggest source of
-      // memory pressure on iOS PWAs and is the cause of the crash-on-export.
-      toast("Building report PDF…");
-      await yieldToUi();
-      try {
-        const { doc, filename: pdfName } = await buildPdf({ photoPaths, layout: "group" });
-        zip.file(pdfName, doc.output("blob"));
-      } catch (err) {
-        console.warn("PDF generation failed, continuing without it.", err);
-      }
+      // The PDF used to be built into the same ZIP, but on properties with
+      // 200+ photos its jsPDF buffer plus all the photo bytes pushes the
+      // iOS PWA over its memory ceiling. Skip it here — the user can tap
+      // Download PDF separately, which streams straight to disk. The HTML
+      // indices below give an equivalent offline report.
 
       // Lightweight HTML indices referencing the same photo files by
       // relative path. Two layouts; each cross-links to the other.
