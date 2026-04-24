@@ -33,6 +33,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Always reserve space for the scrollbar so the layout doesn't jump when
+   the lightbox opens and body-scroll-lock hides it. */
+html {
+  scrollbar-gutter: stable;
+}
+
 .app-header {
   position: relative;
   z-index: 10;

@@ -20,7 +20,7 @@
     "windows": "Windows",
     "doors": "Other",
     "conservatory": "Other",
-    "renewables": "Other",
+    "renewables": "Renewables",
     "mains heating": "Heating",
     "secondary heating": "Heating",
     "water heating": "Heating",
@@ -69,6 +69,7 @@
     "Lighting",
     "Heating",
     "Ventilation",
+    "Renewables",
     "Meters",
     "Other",
   ];
@@ -2097,13 +2098,20 @@
 
   // iOS Safari / PWA lets the document behind a fixed overlay rubber-band
   // when the user drags near the edges. Lock the body position while the
-  // lightbox is open so the page underneath literally can't move.
-  const bodyScrollLock = { active: false, y: 0 };
+  // lightbox is open so the page underneath literally can't move. We
+  // also reserve the scrollbar width (where the browser has one) so the
+  // layout doesn't jump when scrolling is taken away.
+  const bodyScrollLock = { active: false, y: 0, scrollbarW: 0 };
   function lockBodyScroll() {
     if (bodyScrollLock.active) return;
     bodyScrollLock.y =
       window.scrollY || window.pageYOffset ||
       (document.documentElement && document.documentElement.scrollTop) || 0;
+    const scrollbarW = Math.max(
+      0,
+      window.innerWidth - (document.documentElement.clientWidth || window.innerWidth)
+    );
+    bodyScrollLock.scrollbarW = scrollbarW;
     const b = document.body;
     b.style.position = "fixed";
     b.style.top = `-${bodyScrollLock.y}px`;
@@ -2111,6 +2119,9 @@
     b.style.right = "0";
     b.style.width = "100%";
     b.style.overflow = "hidden";
+    if (scrollbarW > 0) {
+      document.documentElement.style.paddingRight = `${scrollbarW}px`;
+    }
     bodyScrollLock.active = true;
   }
   function unlockBodyScroll() {
@@ -2122,6 +2133,9 @@
     b.style.right = "";
     b.style.width = "";
     b.style.overflow = "";
+    if (bodyScrollLock.scrollbarW > 0) {
+      document.documentElement.style.paddingRight = "";
+    }
     window.scrollTo(0, bodyScrollLock.y);
     bodyScrollLock.active = false;
   }
