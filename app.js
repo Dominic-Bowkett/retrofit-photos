@@ -3998,57 +3998,41 @@ body{display:flex;flex-direction:column}
 
   wireMetaInputs();
 
-  // -------------------- Close-section FAB --------------------
-  // Floating pill that appears once the user has scrolled past the top
-  // of an expanded accordion (Job details, a flat group, or a room). A
-  // tap collapses that card and jumps the viewport back to its header,
-  // saving the scroll back up through a long section.
+  // -------------------- Close-all FAB --------------------
+  // Floating pill that appears whenever at least one accordion is open
+  // and the user has scrolled below the top of the page. A tap
+  // collapses every expanded card — Job details, all flat groups, and
+  // all rooms — and slides the viewport back to the top. The simple
+  // "any-open + scrollY > 120" rule sidesteps iOS PWA scroll-event
+  // quirks that made the previous per-card detection unreliable.
   (function wireCollapseFab() {
     const fab = document.getElementById("collapse-fab");
     if (!fab) return;
-    let currentHeader = null;
-    let currentCard = null;
 
-    const findExpanded = () => {
-      const candidates = [
-        ...document.querySelectorAll(".card.meta:not(.collapsed) .meta-header"),
-        ...document.querySelectorAll(".card.group:not(.collapsed) > .group-header"),
-        ...document.querySelectorAll(".card.room:not(.collapsed) > .room-header"),
-      ];
-      const pad = 10;
-      const viewportTop = pad;
-      let best = null;
-      for (const header of candidates) {
-        const card = header.closest(".card");
-        if (!card) continue;
-        const rect = card.getBoundingClientRect();
-        // User is scrolled past the header (it's above the viewport top)
-        // AND the card's body still extends below the viewport top —
-        // i.e. they are "inside" this section.
-        if (rect.top < viewportTop && rect.bottom > viewportTop + 60) {
-          if (!best || rect.top > best.rect.top) {
-            best = { header, card, rect };
-          }
-        }
-      }
-      return best;
+    const anyExpanded = () =>
+      !!document.querySelector(
+        ".card.meta:not(.collapsed), .card.group:not(.collapsed), .card.room:not(.collapsed)"
+      );
+
+    const scrolledPast = () => {
+      // window.scrollY isn't always populated instantly on iOS PWAs;
+      // fall back to documentElement / body scrollTop too.
+      const y =
+        window.scrollY ||
+        window.pageYOffset ||
+        (document.documentElement && document.documentElement.scrollTop) ||
+        (document.body && document.body.scrollTop) ||
+        0;
+      return y > 120;
     };
 
     const update = () => {
-      const hit = findExpanded();
-      if (!hit) {
-        currentHeader = null;
-        currentCard = null;
-        fab.hidden = true;
-        return;
-      }
-      currentHeader = hit.header;
-      currentCard = hit.card;
-      fab.hidden = false;
+      const show = anyExpanded() && scrolledPast();
+      fab.hidden = !show;
     };
 
     let ticking = false;
-    const onScroll = () => {
+    const scheduleUpdate = () => {
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
@@ -4056,19 +4040,45 @@ body{display:flex;flex-direction:column}
         ticking = false;
       });
     };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", update);
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+    // Also react when an accordion is toggled from anywhere in the app.
+    document.addEventListener("click", scheduleUpdate, true);
+    // iOS PWA sometimes fires scroll events on document instead of window.
+    document.addEventListener("scroll", scheduleUpdate, { passive: true, capture: true });
+
+    const collapseAll = () => {
+      // Meta card (Job details).
+      const metaCard = document.getElementById("meta-card");
+      if (metaCard && !metaCard.classList.contains("collapsed")) {
+        const header = metaCard.querySelector(".meta-header");
+        if (header) header.click();
+      }
+      // Flat groups — click each open group's header.
+      document
+        .querySelectorAll(".card.group:not(.collapsed)")
+        .forEach((node) => {
+          const header = node.querySelector(":scope > .group-header");
+          if (header) header.click();
+        });
+      // Rooms — same, but on .room-header.
+      document
+        .querySelectorAll(".card.room:not(.collapsed)")
+        .forEach((node) => {
+          const header = node.querySelector(":scope > .room-header");
+          if (header) header.click();
+        });
+    };
 
     fab.addEventListener("click", () => {
-      if (!currentHeader || !currentCard) return;
-      const card = currentCard;
-      currentHeader.click();
-      // Land the collapsed card back in view so the user sees it close.
-      if (card && typeof card.scrollIntoView === "function") {
-        card.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-      update();
+      collapseAll();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      // Hide straight away — no need to wait for the scroll to finish.
+      fab.hidden = true;
     });
+
+    // Kick a first check in case the user reloads mid-scroll.
+    scheduleUpdate();
   })();
 
   // -------------------- Boot --------------------
