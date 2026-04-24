@@ -35,6 +35,9 @@
         <button id="btn-refresh" class="btn btn-ghost" type="button" title="Reload the app" aria-label="Reload the app">
           <span aria-hidden="true">↻</span>
         </button>
+        <button id="btn-settings" class="btn btn-ghost" type="button" title="Settings" aria-label="Settings">
+          <span aria-hidden="true">⚙</span>
+        </button>
         <button id="btn-export-photos" class="btn" type="button" disabled>Export photos</button>
         <button id="btn-export" class="btn btn-primary" type="button" disabled>Download PDF</button>
       </div>
@@ -256,6 +259,13 @@
           </button>
           <button type="button" id="lightbox-delete" class="lightbox-danger" aria-label="Delete photo">Delete</button>
         </div>
+        <div class="lightbox-analyse-row">
+          <select id="lightbox-analyse-preset" aria-label="Analysis preset">
+            <option value="">Analyse as…</option>
+          </select>
+          <button type="button" id="lightbox-analyse-run" class="lightbox-analyse-btn">Run analysis</button>
+        </div>
+        <div class="lightbox-analyses" id="lightbox-analyses" aria-label="Photo analyses"></div>
       </footer>
     </div>
 
@@ -275,6 +285,38 @@
           with the original group shown as a subtitle.
         </p>
         <button class="btn btn-ghost-dark" id="pdf-layout-cancel" type="button">Cancel</button>
+      </div>
+    </div>
+
+    <div id="settings-dialog" class="dialog" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="dialog-backdrop" id="settings-backdrop"></div>
+      <div class="dialog-card">
+        <h2 id="settings-title">Settings</h2>
+        <p>Configure the Claude API key used to analyse photos (identify meter make/model, smart-meter status, boiler specs, etc.).</p>
+        <div class="settings-grid">
+          <label class="settings-field">
+            <span>Claude API key</span>
+            <input id="settings-api-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-..." />
+            <button type="button" id="settings-api-key-toggle" class="settings-inline-btn" aria-label="Show/hide API key">Show</button>
+          </label>
+          <label class="settings-field">
+            <span>Default model</span>
+            <select id="settings-model"></select>
+          </label>
+        </div>
+        <p class="dialog-help">
+          <strong>Key is stored in this browser only</strong> — in
+          <code>localStorage</code>, which any code running on this page (including
+          browser extensions) can read. Create a dedicated API key with spend
+          limits on the Anthropic Console and rotate it if you suspect it's been
+          exposed. The key never leaves your device except when making a request
+          to <code>api.anthropic.com</code>.
+        </p>
+        <div class="dialog-actions">
+          <button class="btn" id="settings-test" type="button">Test connection</button>
+          <button class="btn btn-primary" id="settings-save" type="button">Save</button>
+        </div>
+        <button class="btn btn-ghost-dark" id="settings-cancel" type="button">Cancel</button>
       </div>
     </div>
 

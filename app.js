@@ -88,6 +88,124 @@
     "Other",
   ];
   const NO_ROOM_TAG = "";
+
+  // -------------------- AI photo analysis (Claude API) --------------------
+  // Calls Claude's vision API with the user's own API key (stored in
+  // localStorage). Key + model are user-configurable via the Settings
+  // dialog. Each preset is one system prompt + one JSON schema, so adding
+  // more is a matter of dropping another entry into this array.
+  const CLAUDE_API_ENDPOINT = "https://api.anthropic.com/v1/messages";
+  const CLAUDE_API_KEY_STORAGE = "retrofit-photos:claude-api-key";
+  const CLAUDE_MODEL_STORAGE = "retrofit-photos:claude-model";
+  const DEFAULT_CLAUDE_MODEL = "claude-opus-4-7";
+  const CLAUDE_MODELS = [
+    { id: "claude-opus-4-7", label: "Opus 4.7 — highest accuracy" },
+    { id: "claude-sonnet-4-6", label: "Sonnet 4.6 — balanced" },
+    { id: "claude-haiku-4-5", label: "Haiku 4.5 — fastest / cheapest" },
+  ];
+
+  const ANALYSIS_SCHEMAS = {
+    electric_meter: {
+      type: "object",
+      properties: {
+        make: { type: ["string", "null"] },
+        model: { type: ["string", "null"] },
+        serial: { type: ["string", "null"] },
+        is_smart_meter: { type: ["boolean", "null"] },
+        smets_generation: { type: ["string", "null"] },
+        is_export_capable: { type: ["boolean", "null"] },
+        current_reading: { type: ["string", "null"] },
+        notes: { type: "string" },
+        confidence: { type: "string", enum: ["high", "medium", "low"] },
+      },
+      required: ["make", "model", "is_smart_meter", "notes", "confidence"],
+      additionalProperties: false,
+    },
+    gas_meter: {
+      type: "object",
+      properties: {
+        make: { type: ["string", "null"] },
+        model: { type: ["string", "null"] },
+        serial: { type: ["string", "null"] },
+        is_smart_meter: { type: ["boolean", "null"] },
+        smets_generation: { type: ["string", "null"] },
+        current_reading: { type: ["string", "null"] },
+        notes: { type: "string" },
+        confidence: { type: "string", enum: ["high", "medium", "low"] },
+      },
+      required: ["make", "model", "is_smart_meter", "notes", "confidence"],
+      additionalProperties: false,
+    },
+    boiler: {
+      type: "object",
+      properties: {
+        make: { type: ["string", "null"] },
+        model: { type: ["string", "null"] },
+        type: { type: ["string", "null"] },
+        fuel: { type: ["string", "null"] },
+        installed_year: { type: ["number", "null"] },
+        efficiency_rating: { type: ["string", "null"] },
+        output_kw: { type: ["number", "null"] },
+        notes: { type: "string" },
+        confidence: { type: "string", enum: ["high", "medium", "low"] },
+      },
+      required: ["make", "model", "type", "notes", "confidence"],
+      additionalProperties: false,
+    },
+  };
+
+  const ANALYSIS_PRESETS = [
+    {
+      id: "electric_meter",
+      label: "Electricity meter",
+      shortLabel: "Elec meter",
+      systemPrompt:
+        "You are a Domestic Energy Assessor's assistant analysing photos of UK electricity meters. " +
+        "Examine the photo and identify: make and model (read the faceplate / labels); the meter's serial number if legible; " +
+        "whether it is a smart meter (LCD display with a communication indicator vs. mechanical counter wheels); " +
+        "which generation if determinable (write SMETS1 or SMETS2, otherwise null); " +
+        "whether it appears export-capable (visible export register, generation/export button, or labelled export channel); " +
+        "and the currently-displayed reading if visible. " +
+        "Return the result as JSON matching the provided schema. Use null for anything not determinable from the photo. " +
+        "Set confidence to high only when the photo clearly supports the identification; any uncertainty → medium or low. " +
+        "Put any useful caveats or uncertainty in notes.",
+      userPrompt:
+        "Analyse this electricity meter photo. Return JSON matching the schema.",
+      schema: ANALYSIS_SCHEMAS.electric_meter,
+    },
+    {
+      id: "gas_meter",
+      label: "Gas meter",
+      shortLabel: "Gas meter",
+      systemPrompt:
+        "You are a Domestic Energy Assessor's assistant analysing photos of UK gas meters. " +
+        "Examine the photo and identify: make and model (read any visible labels / data plate); serial number if legible; " +
+        "whether it is a smart meter (LCD + communications indicator vs. mechanical dials); " +
+        "which generation if determinable (SMETS1 / SMETS2, otherwise null); and the currently-displayed reading if visible. " +
+        "Return JSON matching the provided schema. Use null for anything not determinable. " +
+        "Confidence high only when unambiguous; any uncertainty → medium or low.",
+      userPrompt:
+        "Analyse this gas meter photo. Return JSON matching the schema.",
+      schema: ANALYSIS_SCHEMAS.gas_meter,
+    },
+    {
+      id: "boiler",
+      label: "Boiler",
+      shortLabel: "Boiler",
+      systemPrompt:
+        "You are a Domestic Energy Assessor's assistant analysing photos of UK domestic boilers (gas / LPG / oil / electric). " +
+        "Examine the photo and identify: make and model (read the badge / data plate); " +
+        "boiler type (combi / system / regular (heat-only) / back boiler / other); " +
+        "fuel (natural_gas / lpg / oil / electric / other); " +
+        "installation year if a date is visible on the data plate (otherwise null); " +
+        "efficiency rating (ErP or SEDBUK band) if visible; and rated output in kW if visible. " +
+        "Return JSON matching the provided schema. Use null for anything not determinable. " +
+        "Confidence high only when unambiguous; any uncertainty → medium or low.",
+      userPrompt:
+        "Analyse this boiler photo. Return JSON matching the schema.",
+      schema: ANALYSIS_SCHEMAS.boiler,
+    },
+  ];
   // Storage / export quality: keep individual exported images at near-original
   // fidelity. Camera captures are re-encoded once when the date/GPS overlay is
   // burned in; uploads keep their original bytes unless they exceed the ceiling.
@@ -226,6 +344,18 @@
     addGroupBtn: null,
     gpsBtn: document.getElementById("btn-enable-gps"),
     refreshBtn: document.getElementById("btn-refresh"),
+    settingsBtn: document.getElementById("btn-settings"),
+    settingsDialog: document.getElementById("settings-dialog"),
+    settingsBackdrop: document.getElementById("settings-backdrop"),
+    settingsApiKey: document.getElementById("settings-api-key"),
+    settingsApiKeyToggle: document.getElementById("settings-api-key-toggle"),
+    settingsModel: document.getElementById("settings-model"),
+    settingsTestBtn: document.getElementById("settings-test"),
+    settingsSaveBtn: document.getElementById("settings-save"),
+    settingsCancelBtn: document.getElementById("settings-cancel"),
+    lightboxAnalysePreset: document.getElementById("lightbox-analyse-preset"),
+    lightboxAnalyseRun: document.getElementById("lightbox-analyse-run"),
+    lightboxAnalyses: document.getElementById("lightbox-analyses"),
     gpsDot: document.getElementById("gps-dot"),
     gpsLabel: document.getElementById("gps-label"),
     exportBtn: document.getElementById("btn-export"),
@@ -2030,6 +2160,8 @@
       const label = els.lightboxDefect.querySelector(".lightbox-chip-label");
       if (label) label.textContent = on ? "Defect" : "No defect";
     }
+    // Refresh the per-photo analysis list + enable/disable Run button.
+    refreshLightboxAnalysisUi();
   }
 
   function stepLightbox(delta) {
@@ -2731,6 +2863,175 @@
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // -------------------- AI photo analysis --------------------
+  function getClaudeApiKey() {
+    try {
+      return localStorage.getItem(CLAUDE_API_KEY_STORAGE) || "";
+    } catch (_) {
+      return "";
+    }
+  }
+  function setClaudeApiKey(key) {
+    try {
+      if (key) localStorage.setItem(CLAUDE_API_KEY_STORAGE, key);
+      else localStorage.removeItem(CLAUDE_API_KEY_STORAGE);
+    } catch (_) {
+      /* noop */
+    }
+  }
+  function getClaudeModel() {
+    try {
+      const m = localStorage.getItem(CLAUDE_MODEL_STORAGE);
+      if (m && CLAUDE_MODELS.some((opt) => opt.id === m)) return m;
+    } catch (_) {
+      /* fall through */
+    }
+    return DEFAULT_CLAUDE_MODEL;
+  }
+  function setClaudeModel(model) {
+    try {
+      if (model && CLAUDE_MODELS.some((opt) => opt.id === model)) {
+        localStorage.setItem(CLAUDE_MODEL_STORAGE, model);
+      }
+    } catch (_) {
+      /* noop */
+    }
+  }
+  function getAnalysisPreset(id) {
+    return ANALYSIS_PRESETS.find((p) => p.id === id) || null;
+  }
+
+  // Split a data URL like "data:image/jpeg;base64,..." into { mediaType, base64 }.
+  function splitDataUrl(dataUrl) {
+    if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) {
+      return { mediaType: "image/jpeg", base64: "" };
+    }
+    const semi = dataUrl.indexOf(";");
+    const comma = dataUrl.indexOf(",");
+    if (semi < 0 || comma < 0) return { mediaType: "image/jpeg", base64: "" };
+    return {
+      mediaType: dataUrl.slice(5, semi),
+      base64: dataUrl.slice(comma + 1),
+    };
+  }
+
+  // Downscale the stored photo before shipping to the API — 1600 px long
+  // edge is plenty for a meter / boiler badge and cuts the request body
+  // substantially on slow networks.
+  async function shrinkForAnalysis(dataUrl) {
+    const MAX = 1600;
+    try {
+      const img = await loadImageFromDataUrl(dataUrl);
+      const longest = Math.max(img.naturalWidth, img.naturalHeight);
+      const scale = longest > MAX ? MAX / longest : 1;
+      if (scale === 1) return dataUrl;
+      const w = Math.max(1, Math.round(img.naturalWidth * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      return canvas.toDataURL("image/jpeg", 0.9);
+    } catch (err) {
+      console.warn("Analysis shrink failed; sending original.", err);
+      return dataUrl;
+    }
+  }
+
+  async function runPhotoAnalysis(photo, presetId) {
+    const preset = getAnalysisPreset(presetId);
+    if (!preset) throw new Error("Unknown analysis preset");
+    const apiKey = getClaudeApiKey();
+    if (!apiKey) {
+      throw new Error("Set a Claude API key in Settings first.");
+    }
+    const model = getClaudeModel();
+    const smaller = await shrinkForAnalysis(photo.dataUrl);
+    const { mediaType, base64 } = splitDataUrl(smaller);
+    if (!base64) throw new Error("Couldn't read the photo data.");
+
+    const body = {
+      model,
+      max_tokens: 1024,
+      system: [
+        {
+          type: "text",
+          text: preset.systemPrompt,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: mediaType,
+                data: base64,
+              },
+            },
+            { type: "text", text: preset.userPrompt },
+          ],
+        },
+      ],
+      output_config: {
+        format: {
+          type: "json_schema",
+          schema: preset.schema,
+        },
+      },
+    };
+
+    let response;
+    try {
+      response = await fetch(CLAUDE_API_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      throw new Error("Network error — check your connection.");
+    }
+
+    if (!response.ok) {
+      let message = `Claude API error (${response.status})`;
+      try {
+        const err = await response.json();
+        if (err && err.error && err.error.message) message = err.error.message;
+      } catch (_) {
+        /* keep generic message */
+      }
+      if (response.status === 401) message = "Invalid API key.";
+      throw new Error(message);
+    }
+
+    const result = await response.json();
+    const textBlock = (result.content || []).find((b) => b.type === "text");
+    if (!textBlock) throw new Error("Empty response from Claude.");
+    let data;
+    try {
+      data = JSON.parse(textBlock.text);
+    } catch (_) {
+      throw new Error("Claude returned a non-JSON response.");
+    }
+
+    return {
+      id: uid("an"),
+      preset: presetId,
+      model,
+      generatedAt: new Date().toISOString(),
+      data,
+    };
   }
 
   // -------------------- PDF export with linked contents --------------------
@@ -3947,6 +4248,262 @@ body{display:flex;flex-direction:column}
         console.warn("Pre-refresh save failed", err);
       }
       location.reload();
+    });
+  }
+
+  // -------------------- Settings dialog --------------------
+  function openSettingsDialog() {
+    if (!els.settingsDialog) return;
+    // Seed the fields from storage each time it opens.
+    if (els.settingsApiKey) els.settingsApiKey.value = getClaudeApiKey();
+    if (els.settingsModel) {
+      if (!els.settingsModel.options.length) {
+        for (const opt of CLAUDE_MODELS) {
+          const o = document.createElement("option");
+          o.value = opt.id;
+          o.textContent = opt.label;
+          els.settingsModel.appendChild(o);
+        }
+      }
+      els.settingsModel.value = getClaudeModel();
+    }
+    els.settingsDialog.hidden = false;
+    els.settingsDialog.setAttribute("aria-hidden", "false");
+  }
+  function closeSettingsDialog() {
+    if (!els.settingsDialog) return;
+    els.settingsDialog.hidden = true;
+    els.settingsDialog.setAttribute("aria-hidden", "true");
+  }
+  if (els.settingsBtn) {
+    els.settingsBtn.addEventListener("click", openSettingsDialog);
+  }
+  if (els.settingsCancelBtn) {
+    els.settingsCancelBtn.addEventListener("click", closeSettingsDialog);
+  }
+  if (els.settingsBackdrop) {
+    els.settingsBackdrop.addEventListener("click", closeSettingsDialog);
+  }
+  if (els.settingsApiKeyToggle && els.settingsApiKey) {
+    els.settingsApiKeyToggle.addEventListener("click", () => {
+      const isPassword = els.settingsApiKey.type === "password";
+      els.settingsApiKey.type = isPassword ? "text" : "password";
+      els.settingsApiKeyToggle.textContent = isPassword ? "Hide" : "Show";
+    });
+  }
+  if (els.settingsSaveBtn) {
+    els.settingsSaveBtn.addEventListener("click", () => {
+      const key = els.settingsApiKey ? els.settingsApiKey.value.trim() : "";
+      const model = els.settingsModel ? els.settingsModel.value : DEFAULT_CLAUDE_MODEL;
+      setClaudeApiKey(key);
+      setClaudeModel(model);
+      closeSettingsDialog();
+      toast(key ? "Settings saved." : "API key cleared.");
+      // Refresh the lightbox analyse button so the disabled state updates
+      // if the user is currently inside the lightbox.
+      refreshLightboxAnalysisUi();
+    });
+  }
+  if (els.settingsTestBtn) {
+    els.settingsTestBtn.addEventListener("click", async () => {
+      const key = els.settingsApiKey ? els.settingsApiKey.value.trim() : "";
+      if (!key) {
+        toast("Enter an API key first.", "err");
+        return;
+      }
+      els.settingsTestBtn.disabled = true;
+      els.settingsTestBtn.textContent = "Testing…";
+      try {
+        const res = await fetch(CLAUDE_API_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": key,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true",
+          },
+          body: JSON.stringify({
+            model: els.settingsModel ? els.settingsModel.value : DEFAULT_CLAUDE_MODEL,
+            max_tokens: 8,
+            messages: [{ role: "user", content: "hi" }],
+          }),
+        });
+        if (res.ok) toast("API key works.");
+        else if (res.status === 401) toast("Invalid API key.", "err");
+        else toast(`API error (${res.status}).`, "err");
+      } catch (_) {
+        toast("Network error.", "err");
+      } finally {
+        els.settingsTestBtn.disabled = false;
+        els.settingsTestBtn.textContent = "Test connection";
+      }
+    });
+  }
+
+  // -------------------- Lightbox: photo analysis --------------------
+  function refreshLightboxAnalysisUi() {
+    const photo = currentLightboxPhoto && currentLightboxPhoto();
+    if (!photo) return;
+    renderLightboxAnalyses(photo);
+    if (els.lightboxAnalyseRun) {
+      els.lightboxAnalyseRun.disabled = !getClaudeApiKey();
+      els.lightboxAnalyseRun.title = els.lightboxAnalyseRun.disabled
+        ? "Set a Claude API key in Settings first"
+        : "";
+    }
+  }
+
+  function renderLightboxAnalyses(photo) {
+    if (!els.lightboxAnalyses) return;
+    els.lightboxAnalyses.innerHTML = "";
+    const list = Array.isArray(photo.analyses) ? photo.analyses : [];
+    for (const entry of list) {
+      els.lightboxAnalyses.appendChild(buildAnalysisCard(entry, photo, { editable: true }));
+    }
+  }
+
+  function formatAnalysisField(key, value) {
+    if (value === null || value === undefined || value === "") return null;
+    if (typeof value === "boolean") return value ? "Yes" : "No";
+    return String(value);
+  }
+
+  function buildAnalysisCard(entry, photo, options) {
+    const opts = options || {};
+    const preset = getAnalysisPreset(entry.preset);
+    const card = document.createElement("div");
+    card.className = "analysis-card";
+    card.dataset.analysisId = entry.id;
+    const confidence = entry.data && entry.data.confidence;
+    if (confidence) card.classList.add(`analysis-conf-${confidence}`);
+
+    const header = document.createElement("div");
+    header.className = "analysis-head";
+    const title = document.createElement("span");
+    title.className = "analysis-title";
+    title.textContent = preset ? preset.label : entry.preset;
+    header.appendChild(title);
+    const modelTag = document.createElement("span");
+    modelTag.className = "analysis-sub";
+    const modelLabel = (CLAUDE_MODELS.find((m) => m.id === entry.model) || {}).label || entry.model;
+    modelTag.textContent = modelLabel;
+    header.appendChild(modelTag);
+    if (confidence) {
+      const confTag = document.createElement("span");
+      confTag.className = `analysis-chip analysis-chip-${confidence}`;
+      confTag.textContent = `${confidence} confidence`;
+      header.appendChild(confTag);
+    }
+    if (opts.editable) {
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "analysis-remove";
+      remove.title = "Remove this analysis";
+      remove.setAttribute("aria-label", "Remove this analysis");
+      remove.textContent = "×";
+      remove.addEventListener("click", () => removeAnalysis(photo, entry.id));
+      header.appendChild(remove);
+    }
+    card.appendChild(header);
+
+    const dl = document.createElement("dl");
+    dl.className = "analysis-fields";
+    const data = entry.data || {};
+    const friendlyKeys = {
+      make: "Make",
+      model: "Model",
+      serial: "Serial",
+      is_smart_meter: "Smart meter",
+      smets_generation: "SMETS",
+      is_export_capable: "Export capable",
+      current_reading: "Reading",
+      type: "Type",
+      fuel: "Fuel",
+      installed_year: "Installed",
+      efficiency_rating: "Efficiency",
+      output_kw: "Output (kW)",
+    };
+    for (const key of Object.keys(friendlyKeys)) {
+      if (!(key in data)) continue;
+      const v = formatAnalysisField(key, data[key]);
+      if (v == null) continue;
+      const dt = document.createElement("dt");
+      dt.textContent = friendlyKeys[key];
+      const dd = document.createElement("dd");
+      dd.textContent = v;
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    }
+    if (dl.childNodes.length) card.appendChild(dl);
+
+    if (data.notes) {
+      const notes = document.createElement("p");
+      notes.className = "analysis-notes";
+      notes.textContent = data.notes;
+      card.appendChild(notes);
+    }
+    return card;
+  }
+
+  async function removeAnalysis(photo, analysisId) {
+    if (!photo || !Array.isArray(photo.analyses)) return;
+    const idx = photo.analyses.findIndex((a) => a.id === analysisId);
+    if (idx === -1) return;
+    photo.analyses.splice(idx, 1);
+    try {
+      await savePhotoNow(photo);
+    } catch (err) {
+      console.warn("Failed to save after analysis remove", err);
+    }
+    lightbox.dirty = true;
+    renderLightboxAnalyses(photo);
+    if (state.view === "analysis") renderGroups();
+  }
+
+  // Populate the preset dropdown once; enable/disable per photo.
+  if (els.lightboxAnalysePreset && !els.lightboxAnalysePreset.options.length) {
+    for (const preset of ANALYSIS_PRESETS) {
+      const o = document.createElement("option");
+      o.value = preset.id;
+      o.textContent = preset.label;
+      els.lightboxAnalysePreset.appendChild(o);
+    }
+    // Keep the "Analyse as…" placeholder at index 0; inserted in the HTML.
+  }
+
+  if (els.lightboxAnalyseRun) {
+    els.lightboxAnalyseRun.addEventListener("click", async () => {
+      const photo = currentLightboxPhoto();
+      if (!photo) return;
+      const presetId = els.lightboxAnalysePreset && els.lightboxAnalysePreset.value;
+      if (!presetId) {
+        toast("Pick what to analyse as first.", "err");
+        return;
+      }
+      if (!getClaudeApiKey()) {
+        toast("Set a Claude API key in Settings first.", "err");
+        openSettingsDialog();
+        return;
+      }
+      els.lightboxAnalyseRun.disabled = true;
+      els.lightboxAnalyseRun.textContent = "Analysing…";
+      try {
+        const entry = await runPhotoAnalysis(photo, presetId);
+        if (!Array.isArray(photo.analyses)) photo.analyses = [];
+        photo.analyses.push(entry);
+        await savePhotoNow(photo);
+        lightbox.dirty = true;
+        renderLightboxAnalyses(photo);
+        toast(`${(getAnalysisPreset(presetId) || {}).label || "Analysis"} done.`);
+        if (els.lightboxAnalysePreset) els.lightboxAnalysePreset.value = "";
+        if (state.view === "analysis") renderGroups();
+      } catch (err) {
+        console.error(err);
+        toast(err.message || "Analysis failed.", "err");
+      } finally {
+        els.lightboxAnalyseRun.disabled = !getClaudeApiKey();
+        els.lightboxAnalyseRun.textContent = "Run analysis";
+      }
     });
   }
 

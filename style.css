@@ -1619,3 +1619,225 @@ body.view-defects .add-room-row {
   text-align: center;
 }
 
+
+/* ---------- Settings dialog ---------- */
+.settings-grid {
+  display: grid;
+  gap: 12px;
+  margin: 10px 0 6px;
+}
+
+.settings-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 6px;
+}
+
+.settings-field > span {
+  grid-column: 1 / -1;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.settings-field input[type="text"],
+.settings-field input[type="password"],
+.settings-field select {
+  grid-column: 1;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  color: var(--ink);
+  background: #fff;
+}
+
+.settings-field select {
+  grid-column: 1 / -1;
+}
+
+.settings-inline-btn {
+  grid-column: 2;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--accent-softer);
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.dialog-card code {
+  background: #f5efde;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+/* ---------- Lightbox: analyse row + results ---------- */
+.lightbox-analyse-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+}
+
+.lightbox-analyse-row select {
+  flex: 1 1 160px;
+  min-width: 140px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 0.88rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+}
+
+.lightbox-analyse-row select option {
+  color: #111;
+  background: #fff;
+}
+
+.lightbox-analyse-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #14120f;
+  border: 1px solid var(--accent);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lightbox-analyse-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lightbox-analyses {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.lightbox-analyses:empty {
+  display: none;
+}
+
+.analysis-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #e2ddd3;
+  font-size: 0.85rem;
+}
+
+.analysis-card.analysis-conf-low {
+  border-left-color: #d97706;
+}
+
+.analysis-card.analysis-conf-medium {
+  border-left-color: #facc15;
+}
+
+.analysis-card.analysis-conf-high {
+  border-left-color: #f59e0b;
+}
+
+.analysis-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.analysis-title {
+  font-weight: 700;
+  color: #f59e0b;
+  font-size: 0.92rem;
+}
+
+.analysis-sub {
+  font-size: 0.74rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.analysis-chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.analysis-chip-high {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f8c464;
+}
+
+.analysis-chip-medium {
+  background: rgba(250, 204, 21, 0.18);
+  color: #facc15;
+}
+
+.analysis-chip-low {
+  background: rgba(217, 119, 6, 0.25);
+  color: #f5b061;
+}
+
+.analysis-remove {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 6px;
+}
+
+.analysis-remove:hover {
+  color: #ff6b6b;
+}
+
+.analysis-fields {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 10px;
+  font-size: 0.82rem;
+}
+
+.analysis-fields dt {
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+}
+
+.analysis-fields dd {
+  margin: 0;
+  color: #fff;
+}
+
+.analysis-notes {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.35;
+}
