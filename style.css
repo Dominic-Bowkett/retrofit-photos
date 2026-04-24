@@ -1846,6 +1846,20 @@ body.view-analysis .add-room-row {
   line-height: 1.35;
 }
 
+.analysis-link {
+  color: var(--accent);
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+.analysis-link:hover {
+  filter: brightness(1.1);
+}
+
+.analysis-list-body .analysis-link {
+  color: var(--accent-ink);
+}
+
 /* ---------- Thumb AI-analysis badge ---------- */
 .thumb-analysis-badge {
   position: absolute;

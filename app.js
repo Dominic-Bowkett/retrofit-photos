@@ -114,7 +114,9 @@
         is_smart_meter: { type: ["boolean", "null"] },
         smets_generation: { type: ["string", "null"] },
         is_export_capable: { type: ["boolean", "null"] },
+        export_capability_source: { type: ["string", "null"] },
         current_reading: { type: ["string", "null"] },
+        manual_url: { type: ["string", "null"] },
         notes: { type: "string" },
         confidence: { type: "string", enum: ["high", "medium", "low"] },
       },
@@ -130,6 +132,7 @@
         is_smart_meter: { type: ["boolean", "null"] },
         smets_generation: { type: ["string", "null"] },
         current_reading: { type: ["string", "null"] },
+        manual_url: { type: ["string", "null"] },
         notes: { type: "string" },
         confidence: { type: "string", enum: ["high", "medium", "low"] },
       },
@@ -146,6 +149,7 @@
         installed_year: { type: ["number", "null"] },
         efficiency_rating: { type: ["string", "null"] },
         output_kw: { type: ["number", "null"] },
+        manual_url: { type: ["string", "null"] },
         notes: { type: "string" },
         confidence: { type: "string", enum: ["high", "medium", "low"] },
       },
@@ -160,17 +164,31 @@
       label: "Electricity meter",
       shortLabel: "Elec meter",
       systemPrompt:
-        "You are a Domestic Energy Assessor's assistant analysing photos of UK electricity meters. " +
-        "Examine the photo and identify: make and model (read the faceplate / labels); the meter's serial number if legible; " +
-        "whether it is a smart meter (LCD display with a communication indicator vs. mechanical counter wheels); " +
-        "which generation if determinable (write SMETS1 or SMETS2, otherwise null); " +
-        "whether it appears export-capable (visible export register, generation/export button, or labelled export channel); " +
-        "and the currently-displayed reading if visible. " +
-        "Return the result as JSON matching the provided schema. Use null for anything not determinable from the photo. " +
-        "Set confidence to high only when the photo clearly supports the identification; any uncertainty → medium or low. " +
-        "Put any useful caveats or uncertainty in notes.",
+        "You are a Domestic Energy Assessor's assistant analysing photos of UK electricity meters.\n\n" +
+        "FROM THE PHOTO, identify:\n" +
+        "- Make and model (read the faceplate / labels).\n" +
+        "- Serial number if legible.\n" +
+        "- Whether it is a smart meter (LCD display with a communication indicator vs. mechanical counter wheels).\n" +
+        "- The currently-displayed reading if visible.\n\n" +
+        "FROM YOUR KNOWLEDGE of the identified make + model (NOT from the photo alone), determine:\n" +
+        "- SMETS generation (SMETS1 or SMETS2) if the model is distinctly one or the other; otherwise null.\n" +
+        "- Export capability: whether this specific model generally supports solar/battery export registers. " +
+        "Export capability is largely a property of the model, not something you can see visually. For common UK " +
+        "meters (Landis+Gyr E470 / E570, Aclara SGM1441/1443, EDMI ES-10B / Atlas Mk10, Kaifa MA120/MA105, " +
+        "Itron ACE3000/4000, Secure Liberty 100, Honeywell/Elster A1700/AS3000 etc.) you usually know. " +
+        "If you don't recognise the model with enough confidence, set is_export_capable to null rather than guess.\n" +
+        "- export_capability_source: short string explaining the basis — e.g. \"Landis+Gyr E470 SMETS2: standard \" +\n" +
+        "  \"UK domestic spec includes export register\" or \"visible export button on faceplate\" or \"unknown model — can't look up\".\n" +
+        "- manual_url: URL to the manufacturer's technical manual / datasheet for this exact model. " +
+        "ONLY include a URL if you are highly confident it is a real, still-active page (prefer official manufacturer domains). " +
+        "If you're not sure the URL is correct, return null. DO NOT invent plausible-looking URLs.\n\n" +
+        "Return JSON matching the schema. Use null for anything you can't determine. " +
+        "confidence=high only when visual identification AND your model knowledge both support the answer; any " +
+        "uncertainty (unclear photo, unfamiliar model, ambiguous export capability) → medium or low. Put the " +
+        "reasoning for borderline calls in notes.",
       userPrompt:
-        "Analyse this electricity meter photo. Return JSON matching the schema.",
+        "Analyse this electricity meter photo. Identify the model visually, then use your knowledge of that model " +
+        "to judge export capability and look up the manual URL. Return JSON matching the schema.",
       schema: ANALYSIS_SCHEMAS.electric_meter,
     },
     {
@@ -178,14 +196,16 @@
       label: "Gas meter",
       shortLabel: "Gas meter",
       systemPrompt:
-        "You are a Domestic Energy Assessor's assistant analysing photos of UK gas meters. " +
-        "Examine the photo and identify: make and model (read any visible labels / data plate); serial number if legible; " +
-        "whether it is a smart meter (LCD + communications indicator vs. mechanical dials); " +
-        "which generation if determinable (SMETS1 / SMETS2, otherwise null); and the currently-displayed reading if visible. " +
-        "Return JSON matching the provided schema. Use null for anything not determinable. " +
-        "Confidence high only when unambiguous; any uncertainty → medium or low.",
+        "You are a Domestic Energy Assessor's assistant analysing photos of UK gas meters.\n\n" +
+        "FROM THE PHOTO, identify: make and model (read any visible labels / data plate); serial number if legible; " +
+        "whether it is a smart meter (LCD + communications indicator vs. mechanical dials); and the currently-displayed reading if visible.\n\n" +
+        "FROM YOUR KNOWLEDGE of the identified make + model: SMETS generation (SMETS1 / SMETS2) if distinct; " +
+        "and manual_url — URL to the manufacturer's technical manual / datasheet for this exact model, ONLY if you are highly " +
+        "confident the URL is real. Prefer official manufacturer domains. If unsure, return null. DO NOT invent URLs.\n\n" +
+        "Return JSON matching the schema. Use null for anything not determinable. " +
+        "confidence=high only when both visual ID and model knowledge support the answer; any uncertainty → medium or low.",
       userPrompt:
-        "Analyse this gas meter photo. Return JSON matching the schema.",
+        "Analyse this gas meter photo. Identify the model visually, then add a manual URL if you're confident it exists. Return JSON matching the schema.",
       schema: ANALYSIS_SCHEMAS.gas_meter,
     },
     {
@@ -193,16 +213,14 @@
       label: "Boiler",
       shortLabel: "Boiler",
       systemPrompt:
-        "You are a Domestic Energy Assessor's assistant analysing photos of UK domestic boilers (gas / LPG / oil / electric). " +
-        "Examine the photo and identify: make and model (read the badge / data plate); " +
-        "boiler type (combi / system / regular (heat-only) / back boiler / other); " +
-        "fuel (natural_gas / lpg / oil / electric / other); " +
-        "installation year if a date is visible on the data plate (otherwise null); " +
-        "efficiency rating (ErP or SEDBUK band) if visible; and rated output in kW if visible. " +
-        "Return JSON matching the provided schema. Use null for anything not determinable. " +
-        "Confidence high only when unambiguous; any uncertainty → medium or low.",
+        "You are a Domestic Energy Assessor's assistant analysing photos of UK domestic boilers (gas / LPG / oil / electric).\n\n" +
+        "FROM THE PHOTO, identify: make and model (read the badge / data plate); boiler type (combi / system / regular / back boiler / other); " +
+        "fuel (natural_gas / lpg / oil / electric / other); installation year if a date is visible; efficiency rating (ErP or SEDBUK band) if visible; rated output in kW if visible.\n\n" +
+        "FROM YOUR KNOWLEDGE of the identified make + model: manual_url — URL to the manufacturer's installation / user manual for this exact model, " +
+        "ONLY if you are highly confident the URL is real and on an official manufacturer domain. If unsure, return null. DO NOT invent URLs.\n\n" +
+        "Return JSON matching the schema. Use null for anything not determinable. confidence=high only when unambiguous.",
       userPrompt:
-        "Analyse this boiler photo. Return JSON matching the schema.",
+        "Analyse this boiler photo. Identify the model, then add a manual URL if you're confident it exists. Return JSON matching the schema.",
       schema: ANALYSIS_SCHEMAS.boiler,
     },
   ];
@@ -3104,7 +3122,7 @@
 
     const body = {
       model,
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: [
         {
           type: "text",
@@ -3538,6 +3556,21 @@
               const noteWrap = doc.splitTextToSize(`Notes: ${a.data.notes}`, pageW - margin * 2);
               for (const ln of noteWrap) {
                 doc.text(ln, margin, lineY);
+                lineY += 11;
+              }
+            }
+            // Manual URL — emit as a clickable annotation so tapping the
+            // line in a PDF viewer opens the manufacturer page.
+            if (a.data && typeof a.data.manual_url === "string" && /^https?:\/\//i.test(a.data.manual_url)) {
+              const url = a.data.manual_url;
+              const manualLine = `Manual: ${url}`;
+              const wrapManual = doc.splitTextToSize(manualLine, pageW - margin * 2);
+              doc.setTextColor(180, 83, 9); // amber-700, link-like
+              for (const ln of wrapManual) {
+                doc.text(ln, margin, lineY);
+                // Make the whole rendered line a clickable external link.
+                const w = doc.getTextWidth(ln);
+                doc.link(margin, lineY - 9, Math.min(w, pageW - margin * 2), 12, { url });
                 lineY += 11;
               }
             }
@@ -4002,6 +4035,8 @@ body{display:flex;flex-direction:column}
 .stage-analysis dt{color:rgba(255,255,255,0.55)}
 .stage-analysis dd{margin:0;color:#fff}
 .stage-analysis-notes{margin:6px 0 0;font-size:0.76rem;color:rgba(255,255,255,0.75);line-height:1.35}
+.stage-analysis-link{color:#f59e0b;text-decoration:underline;font-weight:600}
+.stage-analysis-link:hover{filter:brightness(1.1)}
 @media (max-width:900px){.stage-analyses{position:static;margin:10px 10px 0;max-width:none;max-height:none}}
 .caption{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);padding:8px 14px;border-radius:10px;background:rgba(0,0,0,0.55);color:#e7e3db;font-size:0.82rem;max-width:90%;text-align:center;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:4}
 .caption .counter{color:#9a948a;margin-left:8px;font-weight:600}
@@ -4207,12 +4242,14 @@ body:not(.js-ready) .app{display:none}
       is_smart_meter: "Smart meter",
       smets_generation: "SMETS",
       is_export_capable: "Export capable",
+      export_capability_source: "Basis",
       current_reading: "Reading",
       type: "Type",
       fuel: "Fuel",
       installed_year: "Installed",
       efficiency_rating: "Efficiency",
-      output_kw: "Output (kW)"
+      output_kw: "Output (kW)",
+      manual_url: "Manual"
     };
     for (var i = 0; i < p.analyses.length; i++) {
       var a = p.analyses[i];
@@ -4235,11 +4272,22 @@ body:not(.js-ready) .app{display:none}
         if (!Object.prototype.hasOwnProperty.call(d, key)) continue;
         var v = d[key];
         if (v === null || v === undefined || v === "") continue;
+        var isLink = key === "manual_url" && typeof v === "string" && /^https?:\\/\\//i.test(v);
         if (typeof v === "boolean") v = v ? "Yes" : "No";
         var dt = document.createElement("dt");
         dt.textContent = friendly[key];
         var dd = document.createElement("dd");
-        dd.textContent = String(v);
+        if (isLink) {
+          var link = document.createElement("a");
+          link.href = v;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = "Open ↗";
+          link.className = "stage-analysis-link";
+          dd.appendChild(link);
+        } else {
+          dd.textContent = String(v);
+        }
         dl.appendChild(dt);
         dl.appendChild(dd);
       }
@@ -4790,13 +4838,17 @@ ${nojsFallback}
       is_smart_meter: "Smart meter",
       smets_generation: "SMETS",
       is_export_capable: "Export capable",
+      export_capability_source: "Basis",
       current_reading: "Reading",
       type: "Type",
       fuel: "Fuel",
       installed_year: "Installed",
       efficiency_rating: "Efficiency",
       output_kw: "Output (kW)",
+      manual_url: "Manual",
     };
+    // Keys whose value should render as a clickable link.
+    const linkKeys = new Set(["manual_url"]);
     for (const key of Object.keys(friendlyKeys)) {
       if (!(key in data)) continue;
       const v = formatAnalysisField(key, data[key]);
@@ -4804,7 +4856,17 @@ ${nojsFallback}
       const dt = document.createElement("dt");
       dt.textContent = friendlyKeys[key];
       const dd = document.createElement("dd");
-      dd.textContent = v;
+      if (linkKeys.has(key) && typeof data[key] === "string" && /^https?:\/\//i.test(data[key])) {
+        const a = document.createElement("a");
+        a.href = data[key];
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = "Open ↗";
+        a.className = "analysis-link";
+        dd.appendChild(a);
+      } else {
+        dd.textContent = v;
+      }
       dl.appendChild(dt);
       dl.appendChild(dd);
     }
