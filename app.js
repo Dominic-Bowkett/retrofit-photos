@@ -40,11 +40,18 @@
   const ROOM_TYPES = [
     "Living Room",
     "Dining Room",
+    "Office",
     "Kitchen",
     "Utility Room",
     "Bedroom",
     "Bathroom",
     "WC",
+    "Hallway",
+    "Landing",
+    "Porch",
+    "Conservatory",
+    "Basement",
+    "Room in Roof",
     "Other",
   ];
   const DEFAULT_ROOM_TYPE = "Living Room";
@@ -52,11 +59,18 @@
   const DEFAULT_HABITABILITY_BY_TYPE = {
     "Living Room": "Habitable",
     "Dining Room": "Habitable",
+    "Office": "Habitable",
     "Kitchen": "Habitable",
     "Utility Room": "Non Habitable",
     "Bedroom": "Habitable",
     "Bathroom": "Wet Room",
     "WC": "Wet Room",
+    "Hallway": "Non Habitable",
+    "Landing": "Non Habitable",
+    "Porch": "Non Habitable",
+    "Conservatory": "Non Habitable",
+    "Basement": "Non Habitable",
+    "Room in Roof": "Habitable",
     "Other": "Habitable",
   };
   // Optional per-photo tag applied to a room photo. Replaces the old
