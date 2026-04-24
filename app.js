@@ -1969,6 +1969,7 @@
     setLightboxSource(lightbox.sourceId, photo && photo.id);
     els.lightbox.hidden = false;
     els.lightbox.setAttribute("aria-hidden", "false");
+    lockBodyScroll();
   }
 
   function currentLightboxPhoto() {
@@ -2028,6 +2029,7 @@
     els.lightbox.setAttribute("aria-hidden", "true");
     els.lightboxImg.src = "";
     resetLightboxZoom();
+    unlockBodyScroll();
     const shouldRerender = lightbox.dirty;
     lightbox.photos = [];
     lightbox.dirty = false;
@@ -2091,6 +2093,37 @@
     lightboxZoom.x = 0;
     lightboxZoom.y = 0;
     applyLightboxTransform();
+  }
+
+  // iOS Safari / PWA lets the document behind a fixed overlay rubber-band
+  // when the user drags near the edges. Lock the body position while the
+  // lightbox is open so the page underneath literally can't move.
+  const bodyScrollLock = { active: false, y: 0 };
+  function lockBodyScroll() {
+    if (bodyScrollLock.active) return;
+    bodyScrollLock.y =
+      window.scrollY || window.pageYOffset ||
+      (document.documentElement && document.documentElement.scrollTop) || 0;
+    const b = document.body;
+    b.style.position = "fixed";
+    b.style.top = `-${bodyScrollLock.y}px`;
+    b.style.left = "0";
+    b.style.right = "0";
+    b.style.width = "100%";
+    b.style.overflow = "hidden";
+    bodyScrollLock.active = true;
+  }
+  function unlockBodyScroll() {
+    if (!bodyScrollLock.active) return;
+    const b = document.body;
+    b.style.position = "";
+    b.style.top = "";
+    b.style.left = "";
+    b.style.right = "";
+    b.style.width = "";
+    b.style.overflow = "";
+    window.scrollTo(0, bodyScrollLock.y);
+    bodyScrollLock.active = false;
   }
 
   (function wireLightboxGestures() {

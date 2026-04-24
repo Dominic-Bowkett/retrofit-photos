@@ -665,6 +665,9 @@ input[type="date"]:focus {
   display: flex;
   flex-direction: column;
   color: #fff;
+  /* Stop vertical drags inside the overlay from bubbling through to the
+     document underneath (iOS rubber-band). */
+  overscroll-behavior: contain;
 }
 
 .lightbox[hidden] {
