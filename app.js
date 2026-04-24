@@ -1674,6 +1674,18 @@
       });
     }
 
+    const saveBtn = node.querySelector(".thumb-save");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", async () => {
+        saveBtn.disabled = true;
+        try {
+          await savePhotoToDevice(photo, group);
+        } finally {
+          saveBtn.disabled = false;
+        }
+      });
+    }
+
     node.querySelector(".thumb-remove").addEventListener("click", async () => {
       const label = photo.label || `photo ${group.photoIds.indexOf(photo.id) + 1}`;
       if (!confirm(`Delete "${label}" from ${group.name}? This can't be undone.`)) return;
@@ -2720,6 +2732,65 @@
     }
   }
 
+  // Build a single File for one photo with EXIF date / GPS stamped in.
+  // Memory-light on purpose: we never hold more than one File at a time.
+  function fileForPhoto(photo, group) {
+    const dataUrl =
+      photo.source === "upload" ? photo.dataUrl : buildExifDataUrl(photo);
+    const bytes = dataUrlToBytes(dataUrl);
+    const stamp = photo.takenAt || photo.uploadedAt || new Date().toISOString();
+    const d = new Date(stamp);
+    const pad = (n) => String(n).padStart(2, "0");
+    const dateStr =
+      `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_` +
+      `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+    const groupName = group && group.name ? group.name : "photo";
+    const labelSlug = slugify(photo.label || groupName);
+    const defectPrefix = photo.defect ? "DEFECT_" : "";
+    const tagPrefix = photo.roomTag ? `${slugify(photo.roomTag)}_` : "";
+    const filename = `${defectPrefix}${tagPrefix}${slugify(groupName)}_${dateStr}_${labelSlug}.jpg`;
+    return new File([new Blob([bytes], { type: "image/jpeg" })], filename, {
+      type: "image/jpeg",
+      lastModified: d.getTime(),
+    });
+  }
+
+  // Save or share a single photo. Tries Web Share first (best on iOS — opens
+  // the share sheet so the user taps "Save Image" to drop it into Photos),
+  // then falls back to a regular download link for desktops / Android.
+  async function savePhotoToDevice(photo, group) {
+    let file;
+    try {
+      file = fileForPhoto(photo, group);
+    } catch (err) {
+      console.error(err);
+      toast("Couldn't prepare photo.", "err");
+      return;
+    }
+    if (photosSupportShare([file])) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: photo.label || group.name || "Photo",
+          text: photo.label || group.name || "",
+        });
+      } catch (err) {
+        if (err && err.name !== "AbortError") {
+          console.warn("Share failed", err);
+          toast("Share failed — try again.", "err");
+        }
+      }
+      return;
+    }
+    try {
+      const blob = new Blob([file], { type: "image/jpeg" });
+      saveBlob(blob, file.name);
+      toast("Photo saved.");
+    } catch (err) {
+      console.error(err);
+      toast("Couldn't save photo.", "err");
+    }
+  }
   function openExportPhotosDialog() {
     els.exportPhotosDialog.hidden = false;
     els.exportPhotosDialog.setAttribute("aria-hidden", "false");
@@ -3034,19 +3105,24 @@ ${switchHtml}
       toast("ZIP library failed to load.", "err");
       return;
     }
-    const items = photoExportItems();
-    if (!items.length) {
+    const total = totalPhotoCount();
+    if (!total) {
       toast("No photos to export.", "err");
       return;
     }
+    // Yield back to the event loop. iOS is quick to kill a PWA whose main
+    // thread is busy for too long, so we pepper the heavy path with awaits
+    // to give it room to breathe and update the UI.
+    const yieldToUi = () => new Promise((r) => setTimeout(r, 0));
     try {
-      toast("Building photos ZIP…");
+      toast(`Preparing ${total} photo${total === 1 ? "" : "s"}…`);
+      await yieldToUi();
       const zip = new JSZip();
 
-      // First pass: drop every photo into its folder and record the
-      // archive-relative path so the PDF and HTML index can link back to it.
-      // Flat groups live at the top level; room sub-groups get nested under
-      // rooms/<room-slug>/<subgroup>/ so the archive mirrors the UI.
+      // First pass: walk photos one-at-a-time, converting to bytes and
+      // handing them to JSZip, then immediately dropping the data URL from
+      // our working set. Yielding between photos lets the browser service
+      // timers / touch events so iOS does not assume the PWA has hung.
       const dirForGroup = new Map(); // group.id -> dir
       const dirTaken = new Map(); // dir -> count
       const photoPaths = new Map(); // photo.id -> "dir/name.jpg"
@@ -3057,7 +3133,14 @@ ${switchHtml}
         if (n > 1) dir = `${dir}-${n}`;
         return dir;
       };
-      for (const { photo, group, index, bytes, stamp, room } of items) {
+
+      const walk = [];
+      for (const g of state.property.groups || []) walk.push({ group: g, room: null });
+      for (const room of state.property.rooms || []) walk.push({ group: room, room });
+
+      let done = 0;
+      for (const { group, room } of walk) {
+        if (!group.photoIds || !group.photoIds.length) continue;
         let dir = dirForGroup.get(group.id);
         if (!dir) {
           if (room) {
@@ -3069,27 +3152,39 @@ ${switchHtml}
           dirForGroup.set(group.id, dir);
         }
         const folder = zip.folder(dir);
-        const defectPrefix = photo.defect ? "DEFECT_" : "";
-        const tagPrefix = room && photo.roomTag ? `${slugify(photo.roomTag)}_` : "";
-        const labelSlug = slugify(photo.label || `${group.name}-${index}`);
-        const name = `${defectPrefix}${tagPrefix}${String(index).padStart(2, "0")}_${labelSlug}.jpg`;
-        folder.file(name, bytes, { date: new Date(stamp) });
-        photoPaths.set(photo.id, `${dir}/${name}`);
+        let index = 0;
+        for (const pid of group.photoIds) {
+          const photo = state.photos.get(pid);
+          if (!photo) continue;
+          index += 1;
+          done += 1;
+          const dataUrl =
+            photo.source === "upload" ? photo.dataUrl : buildExifDataUrl(photo);
+          const bytes = dataUrlToBytes(dataUrl);
+          const stamp = photo.takenAt || photo.uploadedAt || new Date().toISOString();
+          const defectPrefix = photo.defect ? "DEFECT_" : "";
+          const tagPrefix = room && photo.roomTag ? `${slugify(photo.roomTag)}_` : "";
+          const labelSlug = slugify(photo.label || `${group.name}-${index}`);
+          const name = `${defectPrefix}${tagPrefix}${String(index).padStart(2, "0")}_${labelSlug}.jpg`;
+          folder.file(name, bytes, { date: new Date(stamp) });
+          photoPaths.set(photo.id, `${dir}/${name}`);
+          if (done % 4 === 0 || done === total) {
+            toast(`Packaging photos… ${done}/${total}`);
+            await yieldToUi();
+          }
+        }
       }
 
-      // Ship two PDFs (one per layout) and two HTML indices so the user
-      // can pick whichever is more useful after extraction.
+      // A single PDF (group layout) is enough — the HTML indices cover the
+      // tag view. Building both PDFs in one pass was the biggest source of
+      // memory pressure on iOS PWAs and is the cause of the crash-on-export.
+      toast("Building report PDF…");
+      await yieldToUi();
       try {
         const { doc, filename: pdfName } = await buildPdf({ photoPaths, layout: "group" });
-        zip.file(pdfName.replace(/\.pdf$/, "_by-group.pdf"), doc.output("blob"));
+        zip.file(pdfName, doc.output("blob"));
       } catch (err) {
-        console.warn("Group-layout PDF failed", err);
-      }
-      try {
-        const { doc, filename: pdfName } = await buildPdf({ photoPaths, layout: "tag" });
-        zip.file(pdfName.replace(/\.pdf$/, "_by-tag.pdf"), doc.output("blob"));
-      } catch (err) {
-        console.warn("Tag-layout PDF failed", err);
+        console.warn("PDF generation failed, continuing without it.", err);
       }
 
       // Lightweight HTML indices referencing the same photo files by
@@ -3115,6 +3210,8 @@ ${switchHtml}
         console.warn("HTML index generation failed.", err);
       }
 
+      toast("Compressing ZIP…");
+      await yieldToUi();
       const zipBlob = await zip.generateAsync({ type: "blob", compression: "STORE" });
       saveBlob(zipBlob, `${reportBaseName()}_photos.zip`);
       toast("Photos ZIP saved.");

@@ -561,6 +561,27 @@ input[type="date"]:focus {
   cursor: pointer;
 }
 
+.thumb-save {
+  width: 30px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-softer);
+  color: var(--accent-ink);
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.thumb-save:hover {
+  filter: brightness(0.97);
+}
+
+.thumb-save:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
 .thumb-add {
   margin: 0;
   background: #fffaed;
