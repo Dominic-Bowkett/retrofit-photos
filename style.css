@@ -2024,3 +2024,37 @@ body.view-analysis .add-room-row {
     grid-template-columns: 88px 1fr;
   }
 }
+
+/* ---------- Lightbox AI-label button ---------- */
+.lightbox-control-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.lightbox-control-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.lightbox-label-ai {
+  flex: 0 0 auto;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #14120f;
+  border: 1px solid var(--accent);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lightbox-label-ai:hover {
+  filter: brightness(1.05);
+}
+
+.lightbox-label-ai:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}

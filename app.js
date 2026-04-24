@@ -363,6 +363,12 @@
     gpsBtn: document.getElementById("btn-enable-gps"),
     refreshBtn: document.getElementById("btn-refresh"),
     settingsBtn: document.getElementById("btn-settings"),
+    autolabelBtn: document.getElementById("btn-autolabel"),
+    autolabelDialog: document.getElementById("autolabel-dialog"),
+    autolabelBackdrop: document.getElementById("autolabel-backdrop"),
+    autolabelScope: document.getElementById("autolabel-scope"),
+    autolabelRunBtn: document.getElementById("autolabel-run"),
+    autolabelCancelBtn: document.getElementById("autolabel-cancel"),
     settingsDialog: document.getElementById("settings-dialog"),
     settingsBackdrop: document.getElementById("settings-backdrop"),
     settingsApiKey: document.getElementById("settings-api-key"),
@@ -401,6 +407,7 @@
     lightboxNextBtn: document.querySelector(".lightbox-next"),
     lightboxFilter: document.getElementById("lightbox-filter"),
     lightboxLabel: document.getElementById("lightbox-label"),
+    lightboxLabelAi: document.getElementById("lightbox-label-ai"),
     lightboxBuilding: document.getElementById("lightbox-building"),
     lightboxTag: document.getElementById("lightbox-tag"),
     lightboxDefect: document.getElementById("lightbox-defect"),
@@ -2596,6 +2603,41 @@
       persistLightboxPhoto();
     });
   }
+  if (els.lightboxLabelAi) {
+    els.lightboxLabelAi.addEventListener("click", async () => {
+      const p = currentLightboxPhoto();
+      if (!p) return;
+      if (!getClaudeApiKey()) {
+        toast("Set a Claude API key in Settings first.", "err");
+        openSettingsDialog();
+        return;
+      }
+      els.lightboxLabelAi.disabled = true;
+      els.lightboxLabelAi.textContent = "…";
+      try {
+        const owner = currentLightboxOwner();
+        const contextName = owner && owner.name
+          ? (owner.habitability ? `${owner.name} (${owner.habitability})` : owner.name)
+          : "";
+        const label = await runPhotoLabel(p, contextName);
+        if (label) {
+          p.label = label;
+          if (els.lightboxLabel) els.lightboxLabel.value = label;
+          if (els.lightboxImg) els.lightboxImg.alt = label;
+          persistLightboxPhoto();
+          toast("Label generated.");
+        } else {
+          toast("Claude returned an empty label.", "err");
+        }
+      } catch (err) {
+        console.error(err);
+        toast(err.message || "Label generation failed.", "err");
+      } finally {
+        els.lightboxLabelAi.disabled = false;
+        els.lightboxLabelAi.textContent = "✨";
+      }
+    });
+  }
   if (els.lightboxBuilding) {
     els.lightboxBuilding.addEventListener("change", () => {
       const p = currentLightboxPhoto();
@@ -3200,6 +3242,181 @@
       generatedAt: new Date().toISOString(),
       data,
     };
+  }
+
+  // Generate a short label for a photo via Claude. The owning section
+  // name (room / flat group) is passed in as contextual_location so the
+  // model can compose labels like "Bedroom 1 — radiator" rather than
+  // picking a generic subject out of thin air.
+  async function runPhotoLabel(photo, contextualLocation) {
+    const apiKey = getClaudeApiKey();
+    if (!apiKey) throw new Error("Set a Claude API key in Settings first.");
+    const model = getClaudeModel();
+    const smaller = await shrinkForAnalysis(photo.dataUrl);
+    const { mediaType, base64 } = splitDataUrl(smaller);
+    if (!base64) throw new Error("Couldn't read the photo data.");
+
+    const locLine = contextualLocation
+      ? `This photo is filed under "${contextualLocation}" in the property survey. ` +
+        `Use that as the location context if the label needs it ` +
+        `(e.g. "Bedroom 1 — radiator", "Bedroom 1", "Meter cupboard — electricity meter").`
+      : "";
+
+    const systemPrompt =
+      "You are a Domestic Energy Assessor's assistant writing concise photo labels for a UK retrofit survey. " +
+      "Given a photo, produce a short 2–8 word label describing what's in the frame, " +
+      "with location context when helpful. " +
+      "Examples of good labels:\n" +
+      "- Living room\n" +
+      "- Bedroom 1\n" +
+      "- Bedroom 1 — radiator\n" +
+      "- Kitchen — boiler\n" +
+      "- Meter cupboard — electricity meter\n" +
+      "- Front elevation from street\n" +
+      "- Loft — insulation\n" +
+      "Keep labels in lowercase except proper nouns and model numbers. " +
+      "Do not include camera metadata, dates, or the word 'photo'. " +
+      "Respond with ONLY the label text via the JSON schema — no quotes, no preamble.";
+
+    const userPrompt = locLine
+      ? `${locLine} Write a short label for this photo. Return JSON with a single "label" field.`
+      : 'Write a short label for this photo. Return JSON with a single "label" field.';
+
+    const body = {
+      model,
+      max_tokens: 128,
+      system: [
+        {
+          type: "text",
+          text: systemPrompt,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: { type: "base64", media_type: mediaType, data: base64 },
+            },
+            { type: "text", text: userPrompt },
+          ],
+        },
+      ],
+      output_config: {
+        format: {
+          type: "json_schema",
+          schema: {
+            type: "object",
+            properties: { label: { type: "string" } },
+            required: ["label"],
+            additionalProperties: false,
+          },
+        },
+      },
+    };
+
+    let response;
+    try {
+      response = await fetch(CLAUDE_API_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (_) {
+      throw new Error("Network error — check your connection.");
+    }
+    if (!response.ok) {
+      let message = `Claude API error (${response.status})`;
+      try {
+        const err = await response.json();
+        if (err && err.error && err.error.message) message = err.error.message;
+      } catch (_) {
+        /* keep generic */
+      }
+      if (response.status === 401) message = "Invalid API key.";
+      throw new Error(message);
+    }
+    const result = await response.json();
+    const textBlock = (result.content || []).find((b) => b.type === "text");
+    if (!textBlock) throw new Error("Empty response from Claude.");
+    let data;
+    try {
+      data = JSON.parse(textBlock.text);
+    } catch (_) {
+      throw new Error("Claude returned a non-JSON response.");
+    }
+    return (data.label || "").toString().trim();
+  }
+
+  // Walk every photo in the current property and optionally re-label it
+  // via Claude. scope:"unlabelled" skips photos that already have a
+  // user-provided label; scope:"all" overwrites existing labels. Both
+  // save per-photo and re-render the groups view at the end.
+  async function runBulkLabel(opts) {
+    const scope = opts && opts.scope === "all" ? "all" : "unlabelled";
+    const hasLabel = (p) => !!(p && p.label && p.label.trim());
+    const targets = [];
+    for (const g of state.property.groups || []) {
+      for (const pid of g.photoIds || []) {
+        const photo = state.photos.get(pid);
+        if (!photo) continue;
+        if (scope === "unlabelled" && hasLabel(photo)) continue;
+        targets.push({ photo, sourceName: g.name });
+      }
+    }
+    for (const room of state.property.rooms || []) {
+      for (const pid of room.photoIds || []) {
+        const photo = state.photos.get(pid);
+        if (!photo) continue;
+        if (scope === "unlabelled" && hasLabel(photo)) continue;
+        targets.push({
+          photo,
+          sourceName: `${room.name} (${room.habitability})`,
+        });
+      }
+    }
+    if (!targets.length) {
+      toast("No photos to label.");
+      return { processed: 0, failed: 0 };
+    }
+    let processed = 0;
+    let failed = 0;
+    for (const { photo, sourceName } of targets) {
+      processed += 1;
+      toast(`Labelling ${processed}/${targets.length}…`);
+      try {
+        const label = await runPhotoLabel(photo, sourceName);
+        if (label) {
+          photo.label = label;
+          try {
+            await savePhotoNow(photo);
+          } catch (err) {
+            console.warn("Failed to persist labelled photo", err);
+          }
+        }
+      } catch (err) {
+        failed += 1;
+        console.warn("Label failed for photo", photo.id, err);
+      }
+      // Small breather so the toast updates, and so we don't hammer
+      // the API at full speed on large properties.
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    renderGroups();
+    toast(
+      failed
+        ? `Labelled ${processed - failed}/${targets.length} (${failed} failed).`
+        : `Labelled ${processed}/${targets.length}.`,
+      failed ? "err" : undefined
+    );
+    return { processed, failed };
   }
 
   // Build a compact one-line summary of an AI analysis for the PDF caption.
@@ -4725,6 +4942,51 @@ ${nojsFallback}
   }
   if (els.settingsBtn) {
     els.settingsBtn.addEventListener("click", openSettingsDialog);
+  }
+
+  // -------------------- Auto-label dialog --------------------
+  function openAutolabelDialog() {
+    if (!els.autolabelDialog) return;
+    els.autolabelDialog.hidden = false;
+    els.autolabelDialog.setAttribute("aria-hidden", "false");
+  }
+  function closeAutolabelDialog() {
+    if (!els.autolabelDialog) return;
+    els.autolabelDialog.hidden = true;
+    els.autolabelDialog.setAttribute("aria-hidden", "true");
+  }
+  if (els.autolabelBtn) {
+    els.autolabelBtn.addEventListener("click", () => {
+      if (!getClaudeApiKey()) {
+        toast("Set a Claude API key in Settings first.", "err");
+        openSettingsDialog();
+        return;
+      }
+      openAutolabelDialog();
+    });
+  }
+  if (els.autolabelCancelBtn) {
+    els.autolabelCancelBtn.addEventListener("click", closeAutolabelDialog);
+  }
+  if (els.autolabelBackdrop) {
+    els.autolabelBackdrop.addEventListener("click", closeAutolabelDialog);
+  }
+  if (els.autolabelRunBtn) {
+    els.autolabelRunBtn.addEventListener("click", async () => {
+      const scope = els.autolabelScope ? els.autolabelScope.value : "unlabelled";
+      els.autolabelRunBtn.disabled = true;
+      els.autolabelRunBtn.textContent = "Working…";
+      try {
+        closeAutolabelDialog();
+        await runBulkLabel({ scope });
+      } catch (err) {
+        console.error(err);
+        toast(err.message || "Auto-label failed.", "err");
+      } finally {
+        els.autolabelRunBtn.disabled = false;
+        els.autolabelRunBtn.textContent = "Run";
+      }
+    });
   }
   if (els.settingsCancelBtn) {
     els.settingsCancelBtn.addEventListener("click", closeSettingsDialog);

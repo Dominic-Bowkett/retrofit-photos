@@ -38,6 +38,9 @@
         <button id="btn-settings" class="btn btn-ghost" type="button" title="Settings" aria-label="Settings">
           <span aria-hidden="true">⚙</span>
         </button>
+        <button id="btn-autolabel" class="btn btn-ghost" type="button" title="Auto-label photos with AI" aria-label="Auto-label photos with AI">
+          <span aria-hidden="true">✨</span>
+        </button>
         <button id="btn-export-photos" class="btn" type="button" disabled>Export photos</button>
         <button id="btn-export" class="btn btn-primary" type="button" disabled>Download PDF</button>
       </div>
@@ -238,7 +241,10 @@
         <div class="lightbox-controls">
           <label class="lightbox-control">
             <span>Label</span>
-            <input type="text" id="lightbox-label" placeholder="Label" />
+            <div class="lightbox-control-row">
+              <input type="text" id="lightbox-label" placeholder="Label" />
+              <button type="button" id="lightbox-label-ai" class="lightbox-label-ai" title="Generate label with AI" aria-label="Generate label with AI">✨</button>
+            </div>
           </label>
           <label class="lightbox-control">
             <span>Building</span>
@@ -324,6 +330,33 @@
           <button class="btn btn-primary" id="settings-save" type="button">Save</button>
         </div>
         <button class="btn btn-ghost-dark" id="settings-cancel" type="button">Cancel</button>
+      </div>
+    </div>
+
+    <div id="autolabel-dialog" class="dialog" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="autolabel-title">
+      <div class="dialog-backdrop" id="autolabel-backdrop"></div>
+      <div class="dialog-card">
+        <h2 id="autolabel-title">Auto-label photos</h2>
+        <p>Generate a short label for every photo in this property using Claude. Labels are based on what's visible plus the section the photo is filed under.</p>
+        <div class="settings-grid">
+          <label class="settings-field">
+            <span>Scope</span>
+            <select id="autolabel-scope">
+              <option value="unlabelled">Only photos without a label (recommended)</option>
+              <option value="all">All photos (overwrite existing labels)</option>
+            </select>
+          </label>
+        </div>
+        <p class="dialog-help">
+          Examples of output: <em>"Living room"</em>, <em>"Bedroom 1"</em>,
+          <em>"Bedroom 1 — radiator"</em>, <em>"Meter cupboard — electricity meter"</em>.
+          Uses the model chosen in Settings — <strong>Haiku is much cheaper</strong> for
+          bulk labelling.
+        </p>
+        <div class="dialog-actions">
+          <button class="btn btn-primary" id="autolabel-run" type="button">Run</button>
+        </div>
+        <button class="btn btn-ghost-dark" id="autolabel-cancel" type="button">Cancel</button>
       </div>
     </div>
 
