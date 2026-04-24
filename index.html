@@ -210,14 +210,48 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <div id="lightbox" class="lightbox" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Photo viewer">
-      <button class="lightbox-btn lightbox-close" type="button" aria-label="Close">&times;</button>
-      <button class="lightbox-btn lightbox-prev" type="button" aria-label="Previous photo">&#x2039;</button>
+    <div id="lightbox" class="lightbox" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Photo editor">
+      <header class="lightbox-header">
+        <label class="lightbox-filter-wrap">
+          <span class="sr-only">Filter photos</span>
+          <select id="lightbox-filter" aria-label="Filter photos"></select>
+        </label>
+        <span class="lightbox-counter" id="lightbox-counter"></span>
+        <button class="lightbox-btn lightbox-close" type="button" aria-label="Close">&times;</button>
+      </header>
       <div class="lightbox-stage">
+        <button class="lightbox-btn lightbox-prev" type="button" aria-label="Previous photo">&#x2039;</button>
         <img id="lightbox-img" alt="" />
+        <button class="lightbox-btn lightbox-next" type="button" aria-label="Next photo">&#x203A;</button>
       </div>
-      <button class="lightbox-btn lightbox-next" type="button" aria-label="Next photo">&#x203A;</button>
-      <div class="lightbox-caption" id="lightbox-caption"></div>
+      <footer class="lightbox-footer">
+        <div class="lightbox-caption" id="lightbox-caption"></div>
+        <div class="lightbox-controls">
+          <label class="lightbox-control">
+            <span>Label</span>
+            <input type="text" id="lightbox-label" placeholder="Label" />
+          </label>
+          <label class="lightbox-control">
+            <span>Building</span>
+            <select id="lightbox-building">
+              <option value="Main">Main</option>
+              <option value="Ext1">Ext1</option>
+              <option value="Ext2">Ext2</option>
+              <option value="Ext3">Ext3</option>
+              <option value="Ext4">Ext4</option>
+            </select>
+          </label>
+          <label class="lightbox-control">
+            <span>Tag</span>
+            <select id="lightbox-tag"></select>
+          </label>
+          <button type="button" id="lightbox-defect" class="lightbox-chip" aria-pressed="false">
+            <span class="lightbox-chip-dot" aria-hidden="true"></span>
+            <span class="lightbox-chip-label">No defect</span>
+          </button>
+          <button type="button" id="lightbox-delete" class="lightbox-danger" aria-label="Delete photo">Delete</button>
+        </div>
+      </footer>
     </div>
 
     <div id="pdf-layout-dialog" class="dialog" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="pdf-layout-title">

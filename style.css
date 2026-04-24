@@ -460,8 +460,14 @@ input[type="date"]:focus {
 
 .thumbs {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+@media (min-width: 720px) {
+  .thumbs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .thumb {
@@ -650,26 +656,66 @@ input[type="date"]:focus {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
-/* ---------- Lightbox ---------- */
+/* ---------- Lightbox / photo editor ---------- */
 .lightbox {
   position: fixed;
   inset: 0;
   z-index: 110;
-  background: rgba(0, 0, 0, 0.92);
-  display: grid;
-  place-items: center;
-  padding: 16px;
+  background: rgba(14, 14, 14, 0.96);
+  display: flex;
+  flex-direction: column;
+  color: #fff;
 }
 
 .lightbox[hidden] {
   display: none;
 }
 
-.lightbox-stage {
+.lightbox-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-wrap: wrap;
+}
+
+.lightbox-filter-wrap {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.lightbox-filter-wrap select {
   width: 100%;
-  height: 100%;
-  display: grid;
-  place-items: center;
+  padding: 8px 12px;
+  font: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  max-width: 100%;
+}
+
+.lightbox-filter-wrap select option {
+  color: #111;
+  background: #fff;
+}
+
+.lightbox-counter {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+}
+
+.lightbox-stage {
+  flex: 1 1 auto;
+  position: relative;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
 }
 
 .lightbox-stage img {
@@ -682,55 +728,156 @@ input[type="date"]:focus {
 }
 
 .lightbox-btn {
-  position: absolute;
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.2);
   font-size: 1.6rem;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 999px;
   display: grid;
   place-items: center;
   cursor: pointer;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+  flex: 0 0 auto;
 }
 
 .lightbox-btn:hover {
   background: rgba(255, 255, 255, 0.2);
 }
 
+.lightbox-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .lightbox-close {
-  top: calc(14px + env(safe-area-inset-top));
-  right: 14px;
+  font-size: 1.4rem;
+  width: 40px;
+  height: 40px;
 }
 
-.lightbox-prev {
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-}
-
+.lightbox-prev,
 .lightbox-next {
-  right: 14px;
+  position: absolute;
   top: 50%;
   transform: translateY(-50%);
+}
+
+.lightbox-prev { left: 14px; }
+.lightbox-next { right: 14px; }
+
+.lightbox-footer {
+  padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .lightbox-caption {
-  position: absolute;
-  left: 50%;
-  bottom: calc(18px + env(safe-area-inset-bottom));
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
   font-size: 0.85rem;
-  padding: 8px 12px;
-  border-radius: 8px;
-  max-width: 90vw;
+  color: rgba(255, 255, 255, 0.85);
   text-align: center;
-  white-space: pre-line;
+  min-height: 1.2em;
+}
+
+.lightbox-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.lightbox-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.7);
+  flex: 1 1 120px;
+  min-width: 100px;
+  max-width: 220px;
+}
+
+.lightbox-control input,
+.lightbox-control select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.lightbox-control input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.lightbox-control select option {
+  color: #111;
+  background: #fff;
+}
+
+.lightbox-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lightbox-chip[aria-pressed="true"],
+.lightbox-chip.is-on {
+  background: rgba(178, 45, 45, 0.18);
+  color: #ffd1d1;
+  border-color: rgba(255, 120, 120, 0.5);
+}
+
+.lightbox-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.lightbox-chip[aria-pressed="true"] .lightbox-chip-dot,
+.lightbox-chip.is-on .lightbox-chip-dot {
+  background: #ff6b6b;
+  box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.3);
+}
+
+.lightbox-danger {
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(178, 45, 45, 0.22);
+  color: #ffd7d7;
+  border: 1px solid rgba(255, 120, 120, 0.4);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lightbox-danger:hover {
+  background: rgba(178, 45, 45, 0.35);
+}
+
+@media (min-width: 720px) {
+  .lightbox-control {
+    flex: 0 1 180px;
+  }
 }
 
 /* ---------- Export photos dialog ---------- */

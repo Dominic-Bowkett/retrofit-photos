@@ -231,9 +231,16 @@
     lightbox: document.getElementById("lightbox"),
     lightboxImg: document.getElementById("lightbox-img"),
     lightboxCaption: document.getElementById("lightbox-caption"),
+    lightboxCounter: document.getElementById("lightbox-counter"),
     lightboxCloseBtn: document.querySelector(".lightbox-close"),
     lightboxPrevBtn: document.querySelector(".lightbox-prev"),
     lightboxNextBtn: document.querySelector(".lightbox-next"),
+    lightboxFilter: document.getElementById("lightbox-filter"),
+    lightboxLabel: document.getElementById("lightbox-label"),
+    lightboxBuilding: document.getElementById("lightbox-building"),
+    lightboxTag: document.getElementById("lightbox-tag"),
+    lightboxDefect: document.getElementById("lightbox-defect"),
+    lightboxDelete: document.getElementById("lightbox-delete"),
     toast: document.getElementById("toast"),
     propSelect: document.getElementById("property-select"),
     newPropBtn: document.getElementById("btn-new-property"),
@@ -1847,46 +1854,165 @@
     els.exportPhotosBtn.disabled = disabled;
   }
 
-  // -------------------- Lightbox (full-size photo viewer) --------------------
+  // -------------------- Lightbox / photo editor --------------------
   const lightbox = {
-    photos: [], // array of photo records currently being browsed
+    photos: [],       // array of photo records currently in the carousel
     index: 0,
+    sources: [],      // [{ id, name, getPhotos: () => photo[] }] for the filter
+    sourceId: "all",  // currently-selected filter key
+    ownersById: new Map(), // photo.id -> its owning group/room object
+    dirty: false,     // whether any edit was made while the lightbox was open
   };
 
-  function openLightbox(group, photo) {
-    // Browse the photos that share the same DOM container as the tapped thumb
-    // (the "group" in by-group view, or the building tag bucket in tag view).
-    const containerSelector = state.view === "tag"
-      ? `[data-group-id="${tagGroupId(photoBuildingOf(photo))}"] .thumb`
-      : `[data-group-id="${group.id}"] .thumb:not(.thumb-add)`;
-    const ids = Array.from(document.querySelectorAll(containerSelector))
-      .map((n) => n.dataset.photoId)
-      .filter(Boolean);
-    const list = ids.map((id) => state.photos.get(id)).filter(Boolean);
-    if (!list.length) return;
-    lightbox.photos = list;
-    lightbox.index = Math.max(0, list.findIndex((p) => p.id === photo.id));
+  function buildLightboxSources() {
+    const sources = [];
+    const ownersById = new Map();
+    const allPhotos = [];
+    for (const g of state.property.groups || []) {
+      const photos = (g.photoIds || [])
+        .map((id) => state.photos.get(id))
+        .filter(Boolean);
+      for (const p of photos) ownersById.set(p.id, g);
+      if (photos.length) {
+        sources.push({ id: `g-${g.id}`, name: g.name, photos });
+        allPhotos.push(...photos);
+      }
+    }
+    for (const room of state.property.rooms || []) {
+      const photos = (room.photoIds || [])
+        .map((id) => state.photos.get(id))
+        .filter(Boolean);
+      for (const p of photos) ownersById.set(p.id, room);
+      if (photos.length) {
+        sources.push({
+          id: `r-${room.id}`,
+          name: `${room.name} (${room.habitability})`,
+          photos,
+        });
+        allPhotos.push(...photos);
+      }
+    }
+    return {
+      sources,
+      ownersById,
+      all: allPhotos,
+    };
+  }
+
+  function renderLightboxFilter() {
+    if (!els.lightboxFilter) return;
+    els.lightboxFilter.innerHTML = "";
+    const optAll = document.createElement("option");
+    optAll.value = "all";
+    optAll.textContent = `All photos (${lightbox.photos && lightbox.sourceId === "all" ? lightbox.photos.length : state.photos.size})`;
+    els.lightboxFilter.appendChild(optAll);
+    for (const s of lightbox.sources) {
+      const opt = document.createElement("option");
+      opt.value = s.id;
+      opt.textContent = `${s.name} · ${s.photos.length}`;
+      els.lightboxFilter.appendChild(opt);
+    }
+    els.lightboxFilter.value = lightbox.sourceId;
+  }
+
+  function populateLightboxTagOptions() {
+    if (!els.lightboxTag || els.lightboxTag.options.length) return;
+    const none = document.createElement("option");
+    none.value = NO_ROOM_TAG;
+    none.textContent = "— Tag —";
+    els.lightboxTag.appendChild(none);
+    for (const t of ROOM_TAGS) {
+      const opt = document.createElement("option");
+      opt.value = t;
+      opt.textContent = t;
+      els.lightboxTag.appendChild(opt);
+    }
+  }
+
+  function setLightboxSource(sourceId, preferPhotoId) {
+    lightbox.sourceId = sourceId;
+    const src = lightbox.sources.find((s) => s.id === sourceId);
+    const listRaw = sourceId === "all" || !src
+      ? lightbox.sources.flatMap((s) => s.photos)
+      : src.photos;
+    // De-dupe in case a photo somehow appears in multiple sources.
+    const seen = new Set();
+    lightbox.photos = [];
+    for (const p of listRaw) {
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      lightbox.photos.push(p);
+    }
+    if (!lightbox.photos.length) {
+      closeLightbox();
+      return;
+    }
+    const idx = preferPhotoId
+      ? lightbox.photos.findIndex((p) => p.id === preferPhotoId)
+      : -1;
+    lightbox.index = idx >= 0 ? idx : 0;
     updateLightbox();
+  }
+
+  function openLightbox(group, photo) {
+    populateLightboxTagOptions();
+    const built = buildLightboxSources();
+    lightbox.sources = built.sources;
+    lightbox.ownersById = built.ownersById;
+    lightbox.dirty = false;
+    // Preselect the source the user tapped from when it's a real source;
+    // tag-view or synthetic "defect-*" sections fall back to "all".
+    const ownerId = group && group.id ? `${state.property.rooms && state.property.rooms.some((r) => r.id === group.id) ? "r" : "g"}-${group.id}` : null;
+    const hasSource = ownerId && lightbox.sources.some((s) => s.id === ownerId);
+    lightbox.sourceId = hasSource ? ownerId : "all";
+    renderLightboxFilter();
+    setLightboxSource(lightbox.sourceId, photo && photo.id);
     els.lightbox.hidden = false;
     els.lightbox.setAttribute("aria-hidden", "false");
   }
 
+  function currentLightboxPhoto() {
+    return lightbox.photos[lightbox.index] || null;
+  }
+
+  function currentLightboxOwner() {
+    const p = currentLightboxPhoto();
+    return p ? lightbox.ownersById.get(p.id) || null : null;
+  }
+
   function updateLightbox() {
-    const p = lightbox.photos[lightbox.index];
+    const p = currentLightboxPhoto();
     if (!p) return closeLightbox();
     els.lightboxImg.src = p.dataUrl;
     els.lightboxImg.alt = p.label || "";
+
+    const owner = currentLightboxOwner();
     const pieces = [];
-    if (p.label) pieces.push(p.label);
-    const tag = photoBuildingOf(p);
-    pieces.push(tag);
+    if (owner && owner.name) pieces.push(owner.name);
     if (p.takenAt) pieces.push(new Date(p.takenAt).toLocaleString());
     else if (p.uploadedAt) pieces.push(`Uploaded ${new Date(p.uploadedAt).toLocaleString()}`);
     if (p.gps) pieces.push(formatGps(p.gps));
-    els.lightboxCaption.textContent = pieces.join(" · ") +
-      `  (${lightbox.index + 1} of ${lightbox.photos.length})`;
+    els.lightboxCaption.textContent = pieces.join(" · ");
+    if (els.lightboxCounter) {
+      els.lightboxCounter.textContent = `${lightbox.index + 1} of ${lightbox.photos.length}`;
+    }
     els.lightboxPrevBtn.disabled = lightbox.index === 0;
     els.lightboxNextBtn.disabled = lightbox.index === lightbox.photos.length - 1;
+
+    if (els.lightboxLabel) els.lightboxLabel.value = p.label || "";
+    if (els.lightboxBuilding) {
+      els.lightboxBuilding.value = BUILDING_TAGS.includes(p.building) ? p.building : DEFAULT_BUILDING;
+    }
+    if (els.lightboxTag) {
+      els.lightboxTag.value = ROOM_TAGS.includes(p.roomTag) ? p.roomTag : NO_ROOM_TAG;
+    }
+    if (els.lightboxDefect) {
+      const on = !!p.defect;
+      els.lightboxDefect.setAttribute("aria-pressed", String(on));
+      els.lightboxDefect.classList.toggle("is-on", on);
+      const label = els.lightboxDefect.querySelector(".lightbox-chip-label");
+      if (label) label.textContent = on ? "Defect" : "No defect";
+    }
   }
 
   function stepLightbox(delta) {
@@ -1900,21 +2026,116 @@
     els.lightbox.hidden = true;
     els.lightbox.setAttribute("aria-hidden", "true");
     els.lightboxImg.src = "";
+    const shouldRerender = lightbox.dirty;
     lightbox.photos = [];
+    lightbox.dirty = false;
+    // Re-render the underlying groups so their thumbs / counts reflect
+    // any building-tag, room-tag, defect, or delete edits made here.
+    if (shouldRerender) renderGroups();
+  }
+
+  function persistLightboxPhoto() {
+    const p = currentLightboxPhoto();
+    if (!p) return;
+    savePhotoNow(p).catch((err) => console.warn("Lightbox save failed", err));
+    lightbox.dirty = true;
   }
 
   els.lightboxCloseBtn.addEventListener("click", closeLightbox);
   els.lightboxPrevBtn.addEventListener("click", () => stepLightbox(-1));
   els.lightboxNextBtn.addEventListener("click", () => stepLightbox(1));
+  // Click-outside-the-image closes; but don't close when the user clicks
+  // form controls inside the footer / header.
   els.lightbox.addEventListener("click", (e) => {
     if (e.target === els.lightbox) closeLightbox();
   });
   document.addEventListener("keydown", (e) => {
     if (els.lightbox.hidden) return;
+    if (e.target && e.target.matches && e.target.matches("input, select, textarea")) return;
     if (e.key === "Escape") closeLightbox();
     else if (e.key === "ArrowLeft") stepLightbox(-1);
     else if (e.key === "ArrowRight") stepLightbox(1);
   });
+
+  if (els.lightboxFilter) {
+    els.lightboxFilter.addEventListener("change", () => {
+      setLightboxSource(els.lightboxFilter.value);
+    });
+  }
+  if (els.lightboxLabel) {
+    const saveLabel = debounce(persistLightboxPhoto, 400);
+    els.lightboxLabel.addEventListener("input", () => {
+      const p = currentLightboxPhoto();
+      if (!p) return;
+      p.label = els.lightboxLabel.value;
+      els.lightboxImg.alt = p.label || "";
+      saveLabel();
+    });
+    els.lightboxLabel.addEventListener("blur", () => {
+      saveLabel.flush && saveLabel.flush();
+      persistLightboxPhoto();
+    });
+  }
+  if (els.lightboxBuilding) {
+    els.lightboxBuilding.addEventListener("change", () => {
+      const p = currentLightboxPhoto();
+      if (!p) return;
+      p.building = els.lightboxBuilding.value;
+      persistLightboxPhoto();
+    });
+  }
+  if (els.lightboxTag) {
+    els.lightboxTag.addEventListener("change", () => {
+      const p = currentLightboxPhoto();
+      if (!p) return;
+      p.roomTag = els.lightboxTag.value;
+      persistLightboxPhoto();
+    });
+  }
+  if (els.lightboxDefect) {
+    els.lightboxDefect.addEventListener("click", () => {
+      const p = currentLightboxPhoto();
+      if (!p) return;
+      p.defect = !p.defect;
+      persistLightboxPhoto();
+      updateLightbox();
+    });
+  }
+  if (els.lightboxDelete) {
+    els.lightboxDelete.addEventListener("click", async () => {
+      const p = currentLightboxPhoto();
+      if (!p) return;
+      const owner = currentLightboxOwner();
+      const label = p.label || (owner && owner.name) || "this photo";
+      if (!confirm(`Delete "${label}"? This can't be undone.`)) return;
+      // Remove from owner's photoIds.
+      if (owner && Array.isArray(owner.photoIds)) {
+        const i = owner.photoIds.indexOf(p.id);
+        if (i !== -1) owner.photoIds.splice(i, 1);
+      }
+      state.photos.delete(p.id);
+      try {
+        await IDB.deletePhoto(p.id);
+      } catch (err) {
+        console.error(err);
+      }
+      saveProperty();
+      lightbox.dirty = true;
+      // Remove from the currently-displayed carousel and advance to the
+      // next remaining photo, or close if none left.
+      lightbox.photos.splice(lightbox.index, 1);
+      if (lightbox.sources.find((s) => s.photos.includes(p))) {
+        const src = lightbox.sources.find((s) => s.photos.includes(p));
+        const j = src.photos.indexOf(p);
+        if (j !== -1) src.photos.splice(j, 1);
+      }
+      lightbox.ownersById.delete(p.id);
+      if (!lightbox.photos.length) return closeLightbox();
+      if (lightbox.index >= lightbox.photos.length) lightbox.index = lightbox.photos.length - 1;
+      renderLightboxFilter();
+      updateLightbox();
+    });
+  }
 
   // -------------------- In-app camera --------------------
   const camera = {
