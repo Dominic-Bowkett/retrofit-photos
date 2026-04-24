@@ -203,6 +203,7 @@
     addGroupName: null,
     addGroupBtn: null,
     gpsBtn: document.getElementById("btn-enable-gps"),
+    refreshBtn: document.getElementById("btn-refresh"),
     gpsDot: document.getElementById("gps-dot"),
     gpsLabel: document.getElementById("gps-label"),
     exportBtn: document.getElementById("btn-export"),
@@ -3258,6 +3259,24 @@ ${switchHtml}
   }
 
   els.gpsBtn.addEventListener("click", enableGps);
+
+  if (els.refreshBtn) {
+    els.refreshBtn.addEventListener("click", async () => {
+      // Flush any pending property save to IndexedDB before reloading so
+      // in-flight edits (names, meta, collapse state) are not dropped.
+      // Photos are saved per-capture already, so they don't need flushing.
+      els.refreshBtn.disabled = true;
+      try {
+        if (state.property) {
+          state.property.updatedAt = new Date().toISOString();
+          await IDB.putProperty(state.property);
+        }
+      } catch (err) {
+        console.warn("Pre-refresh save failed", err);
+      }
+      location.reload();
+    });
+  }
 
   // Populate the "Add room" type selector once at boot.
   if (els.newRoomType) {
