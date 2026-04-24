@@ -3718,9 +3718,18 @@
     const layout = (opts && opts.layout) || "group";
     const includeAnalysis = opts ? opts.includeAnalysis !== false : true;
     try {
-      const { doc, filename } = await buildPdf({ layout, includeAnalysis });
-      doc.save(filename);
-      toast(`PDF saved (${layout === "tag" ? "by tag" : "by group"}).`);
+      const built = await buildPdf({ layout, includeAnalysis });
+      // Differentiate the filename so the user can tell at a glance which
+      // mode ran, and pick up a new download on subsequent exports instead
+      // of the browser re-opening a cached copy with the same name.
+      let filename = built.filename;
+      if (!includeAnalysis) filename = filename.replace(/\.pdf$/, "_no-ai.pdf");
+      if (layout === "tag") filename = filename.replace(/\.pdf$/, "_by-tag.pdf");
+      built.doc.save(filename);
+      toast(
+        `PDF saved (${layout === "tag" ? "by tag" : "by group"}, ` +
+          `${includeAnalysis ? "AI analysis included" : "AI analysis skipped"}).`
+      );
     } catch (err) {
       console.error(err);
       toast(err.message || "Failed to build PDF.", "err");
