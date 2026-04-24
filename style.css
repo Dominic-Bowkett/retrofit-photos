@@ -1217,6 +1217,59 @@ input[type="date"]:focus {
   z-index: 50;
 }
 
+.collapse-fab {
+  position: fixed;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 45;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--accent);
+  border: 1px solid var(--primary);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.collapse-fab[hidden] {
+  display: none;
+}
+
+.collapse-fab:hover {
+  filter: brightness(1.15);
+}
+
+.collapse-fab:active {
+  transform: translateY(1px);
+}
+
+.collapse-fab-arrow {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+@media (max-width: 520px) {
+  .collapse-fab {
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    padding: 9px 13px;
+    font-size: 0.82rem;
+  }
+  .collapse-fab-text {
+    display: none;
+  }
+  .collapse-fab-arrow {
+    font-size: 1.1rem;
+  }
+}
+
 .toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);

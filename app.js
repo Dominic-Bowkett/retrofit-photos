@@ -3872,6 +3872,79 @@ body{display:flex;flex-direction:column}
 
   wireMetaInputs();
 
+  // -------------------- Close-section FAB --------------------
+  // Floating pill that appears once the user has scrolled past the top
+  // of an expanded accordion (Job details, a flat group, or a room). A
+  // tap collapses that card and jumps the viewport back to its header,
+  // saving the scroll back up through a long section.
+  (function wireCollapseFab() {
+    const fab = document.getElementById("collapse-fab");
+    if (!fab) return;
+    let currentHeader = null;
+    let currentCard = null;
+
+    const findExpanded = () => {
+      const candidates = [
+        ...document.querySelectorAll(".card.meta:not(.collapsed) .meta-header"),
+        ...document.querySelectorAll(".card.group:not(.collapsed) > .group-header"),
+        ...document.querySelectorAll(".card.room:not(.collapsed) > .room-header"),
+      ];
+      const pad = 10;
+      const viewportTop = pad;
+      let best = null;
+      for (const header of candidates) {
+        const card = header.closest(".card");
+        if (!card) continue;
+        const rect = card.getBoundingClientRect();
+        // User is scrolled past the header (it's above the viewport top)
+        // AND the card's body still extends below the viewport top —
+        // i.e. they are "inside" this section.
+        if (rect.top < viewportTop && rect.bottom > viewportTop + 60) {
+          if (!best || rect.top > best.rect.top) {
+            best = { header, card, rect };
+          }
+        }
+      }
+      return best;
+    };
+
+    const update = () => {
+      const hit = findExpanded();
+      if (!hit) {
+        currentHeader = null;
+        currentCard = null;
+        fab.hidden = true;
+        return;
+      }
+      currentHeader = hit.header;
+      currentCard = hit.card;
+      fab.hidden = false;
+    };
+
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        update();
+        ticking = false;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", update);
+
+    fab.addEventListener("click", () => {
+      if (!currentHeader || !currentCard) return;
+      const card = currentCard;
+      currentHeader.click();
+      // Land the collapsed card back in view so the user sees it close.
+      if (card && typeof card.scrollIntoView === "function") {
+        card.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      update();
+    });
+  })();
+
   // -------------------- Boot --------------------
   const GPS_INTRO_KEY = "retrofit-photos:gps-intro-seen";
 
