@@ -1223,11 +1223,12 @@
   }
 
   function setView(view) {
-    if (view !== "group" && view !== "tag" && view !== "defects") return;
+    if (view !== "group" && view !== "tag" && view !== "defects" && view !== "analysis") return;
     if (state.view === view) return;
     state.view = view;
     document.body.classList.toggle("view-defects", view === "defects");
     document.body.classList.toggle("view-tag", view === "tag");
+    document.body.classList.toggle("view-analysis", view === "analysis");
     for (const btn of els.viewToggleBtns) {
       const active = btn.dataset.view === view;
       btn.classList.toggle("is-active", active);
@@ -1262,11 +1263,134 @@
       renderByTag();
     } else if (state.view === "defects") {
       renderByDefects();
+    } else if (state.view === "analysis") {
+      renderByAnalysis();
     } else {
       for (const group of state.property.groups) {
         renderGroup(group, els.groups);
       }
     }
+  }
+
+  function renderByAnalysis() {
+    // Flatten every photo that has at least one analysis, keyed by
+    // source group/room so the list reads "which photo, in which
+    // section, analysed how".
+    const entries = [];
+    const pushPhoto = (photo, source) => {
+      if (!photo || !Array.isArray(photo.analyses) || !photo.analyses.length) return;
+      entries.push({ photo, source });
+    };
+    for (const g of state.property.groups || []) {
+      for (const pid of g.photoIds || []) {
+        pushPhoto(state.photos.get(pid), g);
+      }
+    }
+    for (const room of state.property.rooms || []) {
+      for (const pid of room.photoIds || []) {
+        pushPhoto(state.photos.get(pid), room);
+      }
+    }
+
+    if (!entries.length) {
+      const empty = document.createElement("p");
+      empty.className = "defects-empty";
+      if (!getClaudeApiKey()) {
+        empty.innerHTML =
+          "No AI analyses yet. Open a photo, choose <em>Analyse as…</em>, and pick a preset. " +
+          "Add a Claude API key in Settings (⚙) first.";
+      } else {
+        empty.innerHTML =
+          "No AI analyses yet. Open a photo, choose <em>Analyse as…</em>, and pick a preset.";
+      }
+      els.groups.appendChild(empty);
+      return;
+    }
+
+    // One synthetic section per preset so similar analyses group together.
+    const bySection = new Map();
+    for (const entry of entries) {
+      for (const a of entry.photo.analyses) {
+        const key = a.preset;
+        if (!bySection.has(key)) bySection.set(key, []);
+        bySection.get(key).push({ entry, analysis: a });
+      }
+    }
+    const presetOrder = ANALYSIS_PRESETS.map((p) => p.id);
+    const orderedKeys = [...bySection.keys()].sort(
+      (a, b) => presetOrder.indexOf(a) - presetOrder.indexOf(b)
+    );
+
+    for (const presetKey of orderedKeys) {
+      const items = bySection.get(presetKey);
+      const preset = getAnalysisPreset(presetKey);
+      const section = document.createElement("article");
+      section.className = "card group group-analysis";
+      const header = document.createElement("header");
+      header.className = "group-header";
+      header.innerHTML = `
+        <div class="group-title-wrap">
+          <h2 class="group-title group-title-locked"></h2>
+          <span class="group-count">${items.length} photo${items.length === 1 ? "" : "s"}</span>
+        </div>`;
+      header.querySelector(".group-title").textContent = preset
+        ? preset.label
+        : presetKey;
+      section.appendChild(header);
+
+      const list = document.createElement("div");
+      list.className = "analysis-list";
+      for (const { entry, analysis } of items) {
+        list.appendChild(buildAnalysisListItem(entry, analysis));
+      }
+      section.appendChild(list);
+      els.groups.appendChild(section);
+    }
+  }
+
+  function buildAnalysisListItem(entry, analysis) {
+    const { photo, source } = entry;
+    const row = document.createElement("div");
+    row.className = "analysis-list-item";
+
+    const thumb = document.createElement("button");
+    thumb.type = "button";
+    thumb.className = "analysis-list-thumb";
+    thumb.setAttribute("aria-label", "Open photo");
+    const img = document.createElement("img");
+    img.src = photo.dataUrl;
+    img.loading = "lazy";
+    img.alt = photo.label || "";
+    thumb.appendChild(img);
+    thumb.addEventListener("click", () => openLightbox(source, photo));
+    row.appendChild(thumb);
+
+    const body = document.createElement("div");
+    body.className = "analysis-list-body";
+
+    const meta = document.createElement("div");
+    meta.className = "analysis-list-meta";
+    const source_name = document.createElement("span");
+    source_name.className = "analysis-list-source";
+    source_name.textContent = (source && source.name) || "";
+    meta.appendChild(source_name);
+    if (photo.label) {
+      const label = document.createElement("span");
+      label.className = "analysis-list-label";
+      label.textContent = photo.label;
+      meta.appendChild(label);
+    }
+    const when = document.createElement("span");
+    when.className = "analysis-list-when";
+    when.textContent = analysis.generatedAt
+      ? new Date(analysis.generatedAt).toLocaleString()
+      : "";
+    meta.appendChild(when);
+    body.appendChild(meta);
+
+    body.appendChild(buildAnalysisCard(analysis, photo, { editable: true }));
+    row.appendChild(body);
+    return row;
   }
 
   function renderByDefects() {
@@ -1784,6 +1908,16 @@
     if (hint) {
       if (options.hint) hint.textContent = options.hint;
       else hint.remove();
+    }
+
+    // Small badge in the top-right when the photo has AI analyses.
+    if (Array.isArray(photo.analyses) && photo.analyses.length) {
+      const badge = document.createElement("span");
+      badge.className = "thumb-analysis-badge";
+      badge.textContent =
+        photo.analyses.length === 1 ? "AI" : `AI ${photo.analyses.length}`;
+      badge.title = "Has AI analysis — tap to view";
+      node.appendChild(badge);
     }
 
     const labelInput = node.querySelector(".thumb-label");

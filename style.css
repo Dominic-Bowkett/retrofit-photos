@@ -1591,7 +1591,9 @@ input[type="date"]:focus {
 
 /* ---------- Defects view ---------- */
 body.view-defects .rooms-card,
-body.view-defects .add-room-row {
+body.view-defects .add-room-row,
+body.view-analysis .rooms-card,
+body.view-analysis .add-room-row {
   display: none;
 }
 
@@ -1840,4 +1842,132 @@ body.view-defects .add-room-row {
   font-size: 0.78rem;
   color: rgba(255, 255, 255, 0.75);
   line-height: 1.35;
+}
+
+/* ---------- Thumb AI-analysis badge ---------- */
+.thumb-analysis-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  background: rgba(18, 18, 18, 0.82);
+  color: var(--accent);
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.thumb {
+  position: relative;
+}
+
+/* ---------- Analysis view ---------- */
+.group.group-analysis {
+  border-left: 4px solid var(--accent);
+}
+
+.group.group-analysis .group-title {
+  color: var(--accent-ink);
+}
+
+.analysis-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.analysis-list-item {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fffaed;
+}
+
+.analysis-list-thumb {
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+}
+
+.analysis-list-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.analysis-list-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.analysis-list-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.analysis-list-source {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.analysis-list-when {
+  margin-left: auto;
+}
+
+/* Re-style analysis cards when they render on the light Analysis page
+   (the lightbox versions live on a dark background). */
+.analysis-list-body .analysis-card {
+  background: #fff;
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.analysis-list-body .analysis-title {
+  color: var(--accent-ink);
+}
+
+.analysis-list-body .analysis-sub {
+  color: var(--muted);
+}
+
+.analysis-list-body .analysis-fields dt {
+  color: var(--muted);
+}
+
+.analysis-list-body .analysis-fields dd,
+.analysis-list-body .analysis-notes {
+  color: var(--ink);
+}
+
+.analysis-list-body .analysis-remove {
+  color: var(--muted);
+}
+
+.analysis-list-body .analysis-remove:hover {
+  color: var(--danger);
+}
+
+@media (max-width: 520px) {
+  .analysis-list-item {
+    grid-template-columns: 88px 1fr;
+  }
 }
