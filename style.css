@@ -518,7 +518,6 @@ input[type="date"]:focus {
 .thumb-tagbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 6px;
   padding: 6px 8px;
   background: #fff5df;
@@ -1530,7 +1529,11 @@ input[type="date"]:focus {
 
 /* ---------- Room-tag dropdown on a thumb ---------- */
 .thumb-roomtag {
-  flex: 0 0 auto;
+  /* Fill whatever space the building select leaves in the tagbar. On
+     narrow thumbs (mobile 2-col) that's still only ~70 px, so the
+     media query below stacks the two selects into two rows. */
+  flex: 1 1 auto;
+  min-width: 0;
   padding: 4px 6px;
   font: inherit;
   font-size: 0.72rem;
@@ -1540,7 +1543,19 @@ input[type="date"]:focus {
   background: #fff;
   color: var(--primary);
   letter-spacing: 0.2px;
-  max-width: 110px;
+}
+
+@media (max-width: 720px) {
+  .thumb-tagbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .thumb-tagbar .thumb-building,
+  .thumb-tagbar .thumb-roomtag {
+    width: 100%;
+    flex: 0 0 auto;
+  }
 }
 
 .thumb-roomtag[value=""]:not(:focus) {
