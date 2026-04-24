@@ -724,7 +724,9 @@ input[type="date"]:focus {
   display: flex;
   align-items: stretch;
   gap: 8px;
-  padding: 8px 14px;
+  /* 16 px matches .lightbox-stage horizontal padding so the input's
+     visual edges line up with the image below. */
+  padding: 10px 16px;
   background: rgba(0, 0, 0, 0.35);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
