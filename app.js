@@ -3261,35 +3261,49 @@
     // rather than living in separate sub-groups.
     let groupsWithPhotos;
     if (layout === "tag") {
+      // Bucket photos by their photo-tag (Room, Undercuts, Windows,
+      // Lighting, Heating, Ventilation, Renewables, Meters, Other) —
+      // matches the app's By Tag view. Untagged photos collect into a
+      // trailing "Untagged" section so the report still covers
+      // everything in the property.
       const buckets = new Map();
-      for (const t of BUILDING_TAGS) buckets.set(t, []);
+      const UNTAGGED_KEY = "__untagged__";
+      const pushEntry = (photo, source) => {
+        if (!photo) return;
+        const key = ROOM_TAGS.includes(photo.roomTag) ? photo.roomTag : UNTAGGED_KEY;
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key).push({ photo, source });
+      };
       for (const g of state.property.groups) {
-        for (const pid of g.photoIds) {
-          const photo = state.photos.get(pid);
-          if (!photo) continue;
-          buckets.get(photoBuildingOf(photo)).push({ photo, source: g });
-        }
+        for (const pid of g.photoIds) pushEntry(state.photos.get(pid), g);
       }
       for (const room of state.property.rooms || []) {
         for (const pid of room.photoIds || []) {
-          const photo = state.photos.get(pid);
-          if (!photo) continue;
-          buckets.get(photoBuildingOf(photo)).push({
-            photo,
-            source: { id: room.id, name: room.name },
-          });
+          pushEntry(state.photos.get(pid), { id: room.id, name: room.name });
         }
       }
       groupsWithPhotos = [];
-      for (const tag of BUILDING_TAGS) {
+      // Tagged sections in canonical ROOM_TAGS order, then Untagged at
+      // the end if it has anything.
+      for (const tag of ROOM_TAGS) {
         const entries = buckets.get(tag);
-        if (!entries.length) continue;
+        if (!entries || !entries.length) continue;
         groupsWithPhotos.push({
           id: tagGroupId(tag),
           name: tag,
           photoIds: entries.map((e) => e.photo.id),
           virtual: true,
           entries,
+        });
+      }
+      const untagged = buckets.get(UNTAGGED_KEY);
+      if (untagged && untagged.length) {
+        groupsWithPhotos.push({
+          id: tagGroupId("Untagged"),
+          name: "Untagged",
+          photoIds: untagged.map((e) => e.photo.id),
+          virtual: true,
+          entries: untagged,
         });
       }
     } else {
