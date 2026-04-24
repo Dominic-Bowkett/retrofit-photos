@@ -716,6 +716,43 @@ input[type="date"]:focus {
   white-space: nowrap;
 }
 
+/* Full-width label bar sitting between the filter header and the
+   image stage. Big tap target for typing + a trailing AI-label
+   button so the photo's headline sits above the image rather than
+   buried in the footer controls. */
+.lightbox-label-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lightbox-label-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+}
+
+.lightbox-label-input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 500;
+}
+
+.lightbox-label-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
 .lightbox-stage {
   flex: 1 1 auto;
   position: relative;
@@ -2032,11 +2069,11 @@ body.view-analysis .add-room-row {
 .lightbox-label-ai {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   flex: 0 0 auto;
-  align-self: flex-end;
-  padding: 10px 14px;
-  min-height: 38px;
+  padding: 0 14px;
+  min-height: 40px;
   border-radius: 8px;
   background: var(--accent);
   color: #14120f;

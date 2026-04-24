@@ -231,6 +231,13 @@
         <span class="lightbox-counter" id="lightbox-counter"></span>
         <button class="lightbox-btn lightbox-close" type="button" aria-label="Close">&times;</button>
       </header>
+      <div class="lightbox-label-bar">
+        <input type="text" id="lightbox-label" class="lightbox-label-input" placeholder="Photo label" aria-label="Photo label" />
+        <button type="button" id="lightbox-label-ai" class="lightbox-label-ai" title="Generate label with AI" aria-label="Generate label with AI">
+          <span class="lightbox-label-ai-glyph" aria-hidden="true">✨</span>
+          <span class="lightbox-label-ai-text">AI label</span>
+        </button>
+      </div>
       <div class="lightbox-stage">
         <button class="lightbox-btn lightbox-prev" type="button" aria-label="Previous photo">&#x2039;</button>
         <img id="lightbox-img" alt="" />
@@ -239,14 +246,6 @@
       <footer class="lightbox-footer">
         <div class="lightbox-caption" id="lightbox-caption"></div>
         <div class="lightbox-controls">
-          <label class="lightbox-control">
-            <span>Label</span>
-            <input type="text" id="lightbox-label" placeholder="Label" />
-          </label>
-          <button type="button" id="lightbox-label-ai" class="lightbox-label-ai" title="Generate label with AI" aria-label="Generate label with AI">
-            <span class="lightbox-label-ai-glyph" aria-hidden="true">✨</span>
-            <span class="lightbox-label-ai-text">AI label</span>
-          </button>
           <label class="lightbox-control">
             <span>Building</span>
             <select id="lightbox-building">
