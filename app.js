@@ -389,6 +389,7 @@
     pdfLayoutBackdrop: document.getElementById("pdf-layout-backdrop"),
     pdfLayoutGroupBtn: document.getElementById("pdf-layout-group"),
     pdfLayoutTagBtn: document.getElementById("pdf-layout-tag"),
+    pdfIncludeAnalysis: document.getElementById("pdf-include-analysis"),
     pdfLayoutCancelBtn: document.getElementById("pdf-layout-cancel"),
     viewToggleBtns: Array.from(document.querySelectorAll(".view-toggle-btn")),
     lightbox: document.getElementById("lightbox"),
@@ -3242,6 +3243,7 @@
   async function buildPdf(options = {}) {
     const photoPaths = options.photoPaths instanceof Map ? options.photoPaths : null;
     const layout = options.layout === "tag" ? "tag" : "group";
+    const includeAnalysis = options.includeAnalysis !== false;
     if (!window.jspdf || !window.jspdf.jsPDF) {
       throw new Error("PDF library failed to load.");
     }
@@ -3535,7 +3537,7 @@
         // Non-invasive: if the photo has no analyses the cursor advance is
         // unchanged, so pagination math is only affected on analysed photos.
         let extraCap = 0;
-        if (Array.isArray(photo.analyses) && photo.analyses.length) {
+        if (includeAnalysis && Array.isArray(photo.analyses) && photo.analyses.length) {
           const analysesBaseY = cursorY + drawH + capH + 2;
           let lineY = analysesBaseY;
           doc.setFontSize(9);
@@ -3700,8 +3702,9 @@
 
   async function exportPdf(opts) {
     const layout = (opts && opts.layout) || "group";
+    const includeAnalysis = opts ? opts.includeAnalysis !== false : true;
     try {
-      const { doc, filename } = await buildPdf({ layout });
+      const { doc, filename } = await buildPdf({ layout, includeAnalysis });
       doc.save(filename);
       toast(`PDF saved (${layout === "tag" ? "by tag" : "by group"}).`);
     } catch (err) {
@@ -4979,13 +4982,17 @@ ${nojsFallback}
 
   els.pdfLayoutCancelBtn.addEventListener("click", closePdfLayoutDialog);
   els.pdfLayoutBackdrop.addEventListener("click", closePdfLayoutDialog);
+  const pdfIncludeAnalysis = () =>
+    !els.pdfIncludeAnalysis || els.pdfIncludeAnalysis.checked;
   els.pdfLayoutGroupBtn.addEventListener("click", () => {
+    const includeAnalysis = pdfIncludeAnalysis();
     closePdfLayoutDialog();
-    exportPdf({ layout: "group" });
+    exportPdf({ layout: "group", includeAnalysis });
   });
   els.pdfLayoutTagBtn.addEventListener("click", () => {
+    const includeAnalysis = pdfIncludeAnalysis();
     closePdfLayoutDialog();
-    exportPdf({ layout: "tag" });
+    exportPdf({ layout: "tag", includeAnalysis });
   });
   document.addEventListener("keydown", (e) => {
     if (!els.pdfLayoutDialog.hidden && e.key === "Escape") {

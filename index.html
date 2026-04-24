@@ -275,6 +275,10 @@
       <div class="dialog-card">
         <h2 id="pdf-layout-title">Download PDF</h2>
         <p>Choose how the photos are organised in the report.</p>
+        <label class="dialog-toggle">
+          <input type="checkbox" id="pdf-include-analysis" checked />
+          <span>Include AI analysis captions (make / model / manual links)</span>
+        </label>
         <div class="dialog-actions">
           <button class="btn btn-primary" id="pdf-layout-group" type="button">By group</button>
           <button class="btn" id="pdf-layout-tag" type="button">By tag (Main / Ext1–4)</button>
@@ -284,6 +288,8 @@
           Walls, etc. — the same order as the app.
           <strong>By tag</strong> groups photos by building (Main, Ext1–Ext4),
           with the original group shown as a subtitle.
+          Untick <em>Include AI analysis</em> if you want a plain-evidence PDF
+          without the auto-generated meter / boiler details.
         </p>
         <button class="btn btn-ghost-dark" id="pdf-layout-cancel" type="button">Cancel</button>
       </div>
