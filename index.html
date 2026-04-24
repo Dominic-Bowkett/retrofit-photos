@@ -241,11 +241,12 @@
         <div class="lightbox-controls">
           <label class="lightbox-control">
             <span>Label</span>
-            <div class="lightbox-control-row">
-              <input type="text" id="lightbox-label" placeholder="Label" />
-              <button type="button" id="lightbox-label-ai" class="lightbox-label-ai" title="Generate label with AI" aria-label="Generate label with AI">✨</button>
-            </div>
+            <input type="text" id="lightbox-label" placeholder="Label" />
           </label>
+          <button type="button" id="lightbox-label-ai" class="lightbox-label-ai" title="Generate label with AI" aria-label="Generate label with AI">
+            <span class="lightbox-label-ai-glyph" aria-hidden="true">✨</span>
+            <span class="lightbox-label-ai-text">AI label</span>
+          </button>
           <label class="lightbox-control">
             <span>Building</span>
             <select id="lightbox-building">

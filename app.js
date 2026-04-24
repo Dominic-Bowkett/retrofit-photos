@@ -2604,7 +2604,13 @@
     });
   }
   if (els.lightboxLabelAi) {
-    els.lightboxLabelAi.addEventListener("click", async () => {
+    const aiTextNode = els.lightboxLabelAi.querySelector(".lightbox-label-ai-text");
+    const aiGlyphNode = els.lightboxLabelAi.querySelector(".lightbox-label-ai-glyph");
+    const originalText = aiTextNode ? aiTextNode.textContent : "";
+    const originalGlyph = aiGlyphNode ? aiGlyphNode.textContent : "";
+    els.lightboxLabelAi.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       const p = currentLightboxPhoto();
       if (!p) return;
       if (!getClaudeApiKey()) {
@@ -2613,7 +2619,8 @@
         return;
       }
       els.lightboxLabelAi.disabled = true;
-      els.lightboxLabelAi.textContent = "…";
+      if (aiTextNode) aiTextNode.textContent = "Generating…";
+      if (aiGlyphNode) aiGlyphNode.textContent = "…";
       try {
         const owner = currentLightboxOwner();
         const contextName = owner && owner.name
@@ -2634,7 +2641,8 @@
         toast(err.message || "Label generation failed.", "err");
       } finally {
         els.lightboxLabelAi.disabled = false;
-        els.lightboxLabelAi.textContent = "✨";
+        if (aiTextNode) aiTextNode.textContent = originalText;
+        if (aiGlyphNode) aiGlyphNode.textContent = originalGlyph;
       }
     });
   }

@@ -2026,28 +2026,31 @@ body.view-analysis .add-room-row {
 }
 
 /* ---------- Lightbox AI-label button ---------- */
-.lightbox-control-row {
-  display: flex;
-  gap: 6px;
-  align-items: stretch;
-}
-
-.lightbox-control-row input {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
+/* Sits outside the Label <label> so iOS Safari doesn't swallow the tap
+   via the label's input-focus association, and gets its own width
+   (not capped by .lightbox-control's max-width). */
 .lightbox-label-ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex: 0 0 auto;
-  padding: 0 10px;
+  align-self: flex-end;
+  padding: 10px 14px;
+  min-height: 38px;
   border-radius: 8px;
   background: var(--accent);
   color: #14120f;
   border: 1px solid var(--accent);
   font: inherit;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
+}
+
+.lightbox-label-ai-glyph {
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .lightbox-label-ai:hover {
@@ -2057,4 +2060,13 @@ body.view-analysis .add-room-row {
 .lightbox-label-ai:disabled {
   opacity: 0.55;
   cursor: progress;
+}
+
+@media (max-width: 520px) {
+  .lightbox-label-ai-text {
+    display: none;
+  }
+  .lightbox-label-ai {
+    padding: 10px 12px;
+  }
 }
