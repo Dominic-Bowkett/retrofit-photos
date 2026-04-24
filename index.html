@@ -250,16 +250,19 @@
         </p>
         <div class="dialog-actions">
           <button class="btn btn-primary" id="export-photos-share" type="button">Save to Photos</button>
-          <button class="btn" id="export-photos-zip" type="button">Download ZIP</button>
+          <button class="btn" id="export-photos-zip" type="button">Download ZIP (compressed)</button>
+          <button class="btn" id="export-photos-zip-original" type="button">Download ZIP (originals)</button>
         </div>
         <p class="dialog-help" id="export-photos-help">
           <strong>Save to Photos</strong> opens your device's share sheet — tap
           <em>Save Image</em> (iOS) or <em>Save to Gallery</em> (Android) to copy
-          the batch to your camera roll. <strong>Download ZIP</strong> saves a
-          single archive of all photos grouped into folders (photos are
-          re-encoded a little smaller so very large jobs — 300+ photos — still
-          fit within the iOS in-app memory budget). For a full-fidelity copy of
-          an individual photo, use the ↓ save button on its thumbnail.
+          the batch to your camera roll. <strong>Download ZIP (compressed)</strong>
+          is the safe default — photos are re-encoded a little smaller so very
+          large jobs still fit within iOS in-app memory.
+          <strong>Download ZIP (originals)</strong> keeps every photo at capture
+          quality; on iPhone as an installed app this may fail on very large
+          properties (rough rule of thumb: 150+ photos). If it does, fall back
+          to the compressed ZIP or the ↓ save button on individual thumbnails.
         </p>
         <button class="btn btn-ghost-dark" id="export-photos-cancel" type="button">Cancel</button>
       </div>

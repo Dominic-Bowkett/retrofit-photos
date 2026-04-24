@@ -219,6 +219,7 @@
     exportPhotosBackdrop: document.getElementById("export-photos-backdrop"),
     exportPhotosShareBtn: document.getElementById("export-photos-share"),
     exportPhotosZipBtn: document.getElementById("export-photos-zip"),
+    exportPhotosZipOriginalBtn: document.getElementById("export-photos-zip-original"),
     exportPhotosCancelBtn: document.getElementById("export-photos-cancel"),
     exportPhotosHelp: document.getElementById("export-photos-help"),
     pdfLayoutDialog: document.getElementById("pdf-layout-dialog"),
@@ -3149,7 +3150,12 @@ ${switchHtml}
 </html>`;
   }
 
-  async function exportPhotosAsZip() {
+  async function exportPhotosAsZip(options = {}) {
+    // compress:true  — re-encode each photo on its way into the ZIP (iOS
+    //   friendly; recommended for properties with 150+ photos).
+    // compress:false — zip the stored dataUrl bytes verbatim so each
+    //   photo is at its captured fidelity.
+    const compress = options.compress !== false;
     if (typeof JSZip === "undefined") {
       toast("ZIP library failed to load.", "err");
       return;
@@ -3164,7 +3170,11 @@ ${switchHtml}
     // to give it room to breathe and update the UI.
     const yieldToUi = () => new Promise((r) => setTimeout(r, 0));
     try {
-      toast(`Preparing ${total} photo${total === 1 ? "" : "s"}…`);
+      toast(
+        compress
+          ? `Preparing ${total} photo${total === 1 ? "" : "s"}…`
+          : `Packaging ${total} original photo${total === 1 ? "" : "s"}…`
+      );
       await yieldToUi();
       const zip = new JSZip();
 
@@ -3207,10 +3217,14 @@ ${switchHtml}
           if (!photo) continue;
           index += 1;
           done += 1;
-          // Re-encode to ~2200 px / q0.82 so iOS PWAs with hundreds of
-          // originals don't blow their process memory budget during the
-          // zip step. EXIF (date / GPS) is re-stamped after the re-encode.
-          let dataUrl = await reencodeForZip(photo.dataUrl);
+          // In compressed mode we re-encode each photo to ~2200 px / q0.82
+          // before zipping so iOS PWAs with hundreds of photos don't blow
+          // their process memory budget. In originals mode we take the
+          // stored JPEG bytes as-is; either way EXIF (date / GPS) is
+          // re-stamped so the saved file still carries metadata.
+          let dataUrl = compress
+            ? await reencodeForZip(photo.dataUrl)
+            : photo.dataUrl;
           dataUrl = insertExifInto(dataUrl, photo);
           const bytes = dataUrlToBytes(dataUrl);
           dataUrl = null; // drop the string reference immediately
@@ -3260,7 +3274,8 @@ ${switchHtml}
       toast("Compressing ZIP…");
       await yieldToUi();
       const zipBlob = await zip.generateAsync({ type: "blob", compression: "STORE" });
-      saveBlob(zipBlob, `${reportBaseName()}_photos.zip`);
+      const suffix = compress ? "_photos.zip" : "_photos_originals.zip";
+      saveBlob(zipBlob, `${reportBaseName()}${suffix}`);
       toast("Photos ZIP saved.");
     } catch (err) {
       console.error(err);
@@ -3386,8 +3401,14 @@ ${switchHtml}
   });
   els.exportPhotosZipBtn.addEventListener("click", () => {
     closeExportPhotosDialog();
-    exportPhotosAsZip();
+    exportPhotosAsZip({ compress: true });
   });
+  if (els.exportPhotosZipOriginalBtn) {
+    els.exportPhotosZipOriginalBtn.addEventListener("click", () => {
+      closeExportPhotosDialog();
+      exportPhotosAsZip({ compress: false });
+    });
+  }
   document.addEventListener("keydown", (e) => {
     if (!els.exportPhotosDialog.hidden && e.key === "Escape") {
       e.preventDefault();
