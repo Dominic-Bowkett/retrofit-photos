@@ -1205,7 +1205,7 @@
   function initExpandedForProperty() {
     state.expanded.clear();
     if (state.view === "tag") {
-      for (const t of BUILDING_TAGS) state.expanded.add(tagGroupId(t));
+      for (const t of ROOM_TAGS) state.expanded.add(tagGroupId(t));
     } else {
       const ext = (state.property.groups || []).find(
         (g) => !g.section && (g.name || "").toLowerCase() === "external elevations"
@@ -1488,34 +1488,45 @@
   }
 
   function renderByTag() {
-    // Bucket every photo by its building tag, tracking the originating group
-    // so the thumb can still show a hint and delete/reorder correctly. Room
-    // sub-group photos are included too; their source carries a display name
-    // that prefixes the room for clarity.
+    // Bucket every tagged photo by its photo.roomTag (Room, Undercuts,
+    // Windows, Lighting, Heating, Ventilation, Renewables, Meters,
+    // Other). Photos without a tag are omitted — the point of this
+    // view is to see what's been labelled and what hasn't.
     const buckets = new Map();
-    for (const t of BUILDING_TAGS) buckets.set(t, []);
+    const pushEntry = (photo, source) => {
+      if (!photo) return;
+      const tag = photo.roomTag;
+      if (!tag || !ROOM_TAGS.includes(tag)) return;
+      if (!buckets.has(tag)) buckets.set(tag, []);
+      buckets.get(tag).push({ group: source, photo });
+    };
     for (const group of state.property.groups) {
-      for (const pid of group.photoIds) {
-        const photo = state.photos.get(pid);
-        if (!photo) continue;
-        buckets.get(photoBuildingOf(photo)).push({ group, photo });
-      }
+      for (const pid of group.photoIds) pushEntry(state.photos.get(pid), group);
     }
     for (const room of state.property.rooms || []) {
       for (const pid of room.photoIds || []) {
-        const photo = state.photos.get(pid);
-        if (!photo) continue;
-        const displayGroup = {
+        pushEntry(state.photos.get(pid), {
           id: room.id,
           name: room.name,
           photoIds: room.photoIds,
-        };
-        buckets.get(photoBuildingOf(photo)).push({ group: displayGroup, photo });
+        });
       }
     }
-    for (const tag of BUILDING_TAGS) {
+
+    if (!buckets.size) {
+      const empty = document.createElement("p");
+      empty.className = "defects-empty";
+      empty.textContent =
+        "No tagged photos yet. Open a photo and pick a tag (Room, Meters, Windows, etc.).";
+      els.groups.appendChild(empty);
+      return;
+    }
+
+    // Canonical order: iterate ROOM_TAGS so the sections always appear
+    // in the same sequence, regardless of which tags are present.
+    for (const tag of ROOM_TAGS) {
       const entries = buckets.get(tag);
-      if (!entries.length) continue;
+      if (!entries || !entries.length) continue;
       const synthetic = {
         id: tagGroupId(tag),
         name: tag,
@@ -1964,6 +1975,10 @@
       roomTagSelect.addEventListener("change", () => {
         photo.roomTag = roomTagSelect.value;
         savePhotoNow(photo).catch((err) => console.warn("Failed to save tag", err));
+        // The By Tag view buckets by photo.roomTag, so a tag change
+        // must re-render that view to move the thumb into the right
+        // bucket (or drop it if the new value is "none").
+        if (state.view === "tag") renderGroups();
       });
     }
 
@@ -4062,6 +4077,13 @@ body:not(.js-ready) .app{display:none}
     ];
     el.sections.appendChild(header("Overview"));
     for (var i = 0; i < 2; i++) el.sections.appendChild(itemBtn(items[i]));
+
+    var tagItems = tagBuckets();
+    if (tagItems.length) {
+      el.sections.appendChild(header("By Tag"));
+      for (var t = 0; t < tagItems.length; t++) el.sections.appendChild(itemBtn(tagItems[t]));
+    }
+
     var sections = DATA.groups.filter(function (g) { return g.photoIds.length > 0; });
     if (sections.length) {
       el.sections.appendChild(header("By room / group"));
@@ -4070,6 +4092,30 @@ body:not(.js-ready) .app{display:none}
         el.sections.appendChild(itemBtn({ id: g.id, name: g.name, count: g.photoIds.length, kind: "group" }));
       }
     }
+  }
+
+  // Canonical tag order for the sidebar. Sync with ROOM_TAGS in the app.
+  var TAG_ORDER = ["Room", "Undercuts", "Windows", "Lighting", "Heating", "Ventilation", "Renewables", "Meters", "Other"];
+
+  function tagBuckets() {
+    var counts = {};
+    for (var id in DATA.photos) {
+      if (!Object.prototype.hasOwnProperty.call(DATA.photos, id)) continue;
+      var t = DATA.photos[id].roomTag;
+      if (t) counts[t] = (counts[t] || 0) + 1;
+    }
+    var out = [];
+    for (var i = 0; i < TAG_ORDER.length; i++) {
+      var name = TAG_ORDER[i];
+      if (counts[name]) out.push({ id: "tag:" + name, name: name, count: counts[name], kind: "tag" });
+    }
+    return out;
+  }
+
+  function tagIds(name) {
+    return allPhotoIds().filter(function (id) {
+      return DATA.photos[id] && DATA.photos[id].roomTag === name;
+    });
   }
   function header(txt) {
     var h = document.createElement("div");
@@ -4097,6 +4143,7 @@ body:not(.js-ready) .app{display:none}
     state.idx = 0;
     if (f === "all") state.photoIds = allPhotoIds();
     else if (f === "defects") state.photoIds = defectIds();
+    else if (f.indexOf("tag:") === 0) state.photoIds = tagIds(f.slice(4));
     else state.photoIds = groupIds(f);
     renderSidebar();
     renderStage();
