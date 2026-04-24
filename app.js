@@ -2057,6 +2057,39 @@
     else if (e.key === "ArrowRight") stepLightbox(1);
   });
 
+  // Horizontal swipe on the stage to step between photos (mobile).
+  (function wireLightboxSwipe() {
+    const stage = document.querySelector(".lightbox-stage");
+    if (!stage) return;
+    let startX = 0;
+    let startY = 0;
+    let active = false;
+    stage.addEventListener("touchstart", (e) => {
+      if (!e.touches || e.touches.length !== 1) {
+        active = false;
+        return;
+      }
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      active = true;
+    }, { passive: true });
+    stage.addEventListener("touchend", (e) => {
+      if (!active) return;
+      active = false;
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      // Require a clear horizontal swipe so taps and vertical scrolls
+      // don't trigger navigation.
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+        stepLightbox(dx > 0 ? -1 : 1);
+      }
+    });
+    // Cancel tracking if the gesture is interrupted (e.g. a call).
+    stage.addEventListener("touchcancel", () => { active = false; });
+  })();
+
   if (els.lightboxFilter) {
     els.lightboxFilter.addEventListener("change", () => {
       setLightboxSource(els.lightboxFilter.value);
