@@ -1983,6 +1983,7 @@
   function updateLightbox() {
     const p = currentLightboxPhoto();
     if (!p) return closeLightbox();
+    resetLightboxZoom();
     els.lightboxImg.src = p.dataUrl;
     els.lightboxImg.alt = p.label || "";
 
@@ -2026,6 +2027,7 @@
     els.lightbox.hidden = true;
     els.lightbox.setAttribute("aria-hidden", "true");
     els.lightboxImg.src = "";
+    resetLightboxZoom();
     const shouldRerender = lightbox.dirty;
     lightbox.photos = [];
     lightbox.dirty = false;
@@ -2058,36 +2060,160 @@
   });
 
   // Horizontal swipe on the stage to step between photos (mobile).
-  (function wireLightboxSwipe() {
+  // Lightbox gesture handling: swipe at 1× to step between photos, pinch
+  // to zoom the photo (the stage has touch-action: none so iOS does not
+  // hijack the gesture for page-level pinch), pan when zoomed,
+  // double-tap to toggle 1× ↔ 2×. Reset on photo change.
+  const lightboxZoom = {
+    scale: 1,
+    x: 0,
+    y: 0,
+    startDist: 0,
+    startScale: 1,
+    startX: 0,
+    startY: 0,
+    panStartX: 0,
+    panStartY: 0,
+    mode: "none", // "none" | "swipe" | "pan" | "pinch"
+    lastTapAt: 0,
+    lastTapX: 0,
+    lastTapY: 0,
+  };
+
+  function applyLightboxTransform() {
+    if (!els.lightboxImg) return;
+    els.lightboxImg.style.transform =
+      `translate3d(${lightboxZoom.x}px, ${lightboxZoom.y}px, 0) scale(${lightboxZoom.scale})`;
+  }
+
+  function resetLightboxZoom() {
+    lightboxZoom.scale = 1;
+    lightboxZoom.x = 0;
+    lightboxZoom.y = 0;
+    applyLightboxTransform();
+  }
+
+  (function wireLightboxGestures() {
     const stage = document.querySelector(".lightbox-stage");
     if (!stage) return;
-    let startX = 0;
-    let startY = 0;
-    let active = false;
+
+    const setManipulating = (on) => stage.classList.toggle("is-manipulating", !!on);
+
     stage.addEventListener("touchstart", (e) => {
-      if (!e.touches || e.touches.length !== 1) {
-        active = false;
-        return;
+      // Ignore touches that land on a form control or button — those have
+      // their own handlers and shouldn't be treated as a swipe origin.
+      if (e.target && e.target.closest("button, select, input, textarea")) return;
+
+      if (e.touches.length === 2) {
+        const [a, b] = e.touches;
+        lightboxZoom.mode = "pinch";
+        lightboxZoom.startDist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+        lightboxZoom.startScale = lightboxZoom.scale;
+        setManipulating(true);
+        e.preventDefault();
+      } else if (e.touches.length === 1) {
+        const t = e.touches[0];
+        if (lightboxZoom.scale > 1.02) {
+          lightboxZoom.mode = "pan";
+          lightboxZoom.panStartX = t.clientX - lightboxZoom.x;
+          lightboxZoom.panStartY = t.clientY - lightboxZoom.y;
+          setManipulating(true);
+        } else {
+          lightboxZoom.mode = "swipe";
+          lightboxZoom.startX = t.clientX;
+          lightboxZoom.startY = t.clientY;
+        }
       }
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-      active = true;
-    }, { passive: true });
+    }, { passive: false });
+
+    stage.addEventListener("touchmove", (e) => {
+      if (lightboxZoom.mode === "pinch" && e.touches.length === 2) {
+        const [a, b] = e.touches;
+        const dist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY) || 1;
+        const next = lightboxZoom.startScale * (dist / (lightboxZoom.startDist || 1));
+        lightboxZoom.scale = Math.max(1, Math.min(4, next));
+        if (lightboxZoom.scale <= 1.01) {
+          lightboxZoom.x = 0;
+          lightboxZoom.y = 0;
+        }
+        applyLightboxTransform();
+        e.preventDefault();
+      } else if (lightboxZoom.mode === "pan" && e.touches.length === 1) {
+        const t = e.touches[0];
+        lightboxZoom.x = t.clientX - lightboxZoom.panStartX;
+        lightboxZoom.y = t.clientY - lightboxZoom.panStartY;
+        applyLightboxTransform();
+        e.preventDefault();
+      }
+    }, { passive: false });
+
     stage.addEventListener("touchend", (e) => {
-      if (!active) return;
-      active = false;
-      const t = e.changedTouches && e.changedTouches[0];
-      if (!t) return;
-      const dx = t.clientX - startX;
-      const dy = t.clientY - startY;
-      // Require a clear horizontal swipe so taps and vertical scrolls
-      // don't trigger navigation.
-      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.4) {
-        stepLightbox(dx > 0 ? -1 : 1);
+      const ended = lightboxZoom.mode;
+      // If the pinch was released, fall through so the next single-finger
+      // touch is tracked cleanly.
+      if (e.touches.length === 0) setManipulating(false);
+
+      if (ended === "swipe" && e.changedTouches.length === 1) {
+        const t = e.changedTouches[0];
+        const dx = t.clientX - lightboxZoom.startX;
+        const dy = t.clientY - lightboxZoom.startY;
+        const now = Date.now();
+        // Horizontal swipe → navigate.
+        if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+          stepLightbox(dx > 0 ? -1 : 1);
+        } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+          // Tap — detect double-tap to toggle zoom.
+          const dt = now - lightboxZoom.lastTapAt;
+          const ddx = Math.abs(t.clientX - lightboxZoom.lastTapX);
+          const ddy = Math.abs(t.clientY - lightboxZoom.lastTapY);
+          if (dt < 300 && ddx < 30 && ddy < 30) {
+            if (lightboxZoom.scale > 1.02) {
+              resetLightboxZoom();
+            } else {
+              lightboxZoom.scale = 2;
+              applyLightboxTransform();
+            }
+            lightboxZoom.lastTapAt = 0;
+          } else {
+            lightboxZoom.lastTapAt = now;
+            lightboxZoom.lastTapX = t.clientX;
+            lightboxZoom.lastTapY = t.clientY;
+          }
+        }
+      }
+
+      if (e.touches.length === 0) {
+        // Snap tiny residual scales back to exactly 1 so a near-reset
+        // doesn't leave an almost-zoomed image.
+        if (lightboxZoom.scale <= 1.02) resetLightboxZoom();
+        lightboxZoom.mode = "none";
+      } else if (e.touches.length === 1 && ended === "pinch") {
+        // Lifting one finger from a pinch: fall back to pan tracking.
+        const t = e.touches[0];
+        lightboxZoom.mode = lightboxZoom.scale > 1.02 ? "pan" : "swipe";
+        if (lightboxZoom.mode === "pan") {
+          lightboxZoom.panStartX = t.clientX - lightboxZoom.x;
+          lightboxZoom.panStartY = t.clientY - lightboxZoom.y;
+        } else {
+          lightboxZoom.startX = t.clientX;
+          lightboxZoom.startY = t.clientY;
+        }
       }
     });
-    // Cancel tracking if the gesture is interrupted (e.g. a call).
-    stage.addEventListener("touchcancel", () => { active = false; });
+
+    stage.addEventListener("touchcancel", () => {
+      lightboxZoom.mode = "none";
+      setManipulating(false);
+    });
+
+    // Desktop: double-click toggles zoom too, for testing + trackpad use.
+    els.lightboxImg.addEventListener("dblclick", () => {
+      if (lightboxZoom.scale > 1.02) resetLightboxZoom();
+      else {
+        lightboxZoom.scale = 2;
+        applyLightboxTransform();
+      }
+    });
   })();
 
   if (els.lightboxFilter) {
