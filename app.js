@@ -3154,8 +3154,11 @@ ${switchHtml}
     // compress:true  — re-encode each photo on its way into the ZIP (iOS
     //   friendly; recommended for properties with 150+ photos).
     // compress:false — zip the stored dataUrl bytes verbatim so each
-    //   photo is at its captured fidelity.
+    //   photo is at its captured fidelity. The originals path is split
+    //   into multiple ZIPs of at most ORIGINALS_CHUNK photos so iOS
+    //   doesn't blow its memory ceiling on a single huge archive.
     const compress = options.compress !== false;
+    const ORIGINALS_CHUNK = 100;
     if (typeof JSZip === "undefined") {
       toast("ZIP library failed to load.", "err");
       return;
@@ -3169,114 +3172,155 @@ ${switchHtml}
     // thread is busy for too long, so we pepper the heavy path with awaits
     // to give it room to breathe and update the UI.
     const yieldToUi = () => new Promise((r) => setTimeout(r, 0));
+
+    // Flatten every photo into { group, room, photo, indexInGroup } so we
+    // can slice the list into fixed-size chunks while still emitting
+    // per-group folders and stable per-group indices inside each chunk.
+    const walkItems = [];
+    for (const g of state.property.groups || []) {
+      let idx = 0;
+      for (const pid of g.photoIds || []) {
+        const photo = state.photos.get(pid);
+        if (!photo) continue;
+        idx += 1;
+        walkItems.push({ group: g, room: null, photo, indexInGroup: idx });
+      }
+    }
+    for (const room of state.property.rooms || []) {
+      let idx = 0;
+      for (const pid of room.photoIds || []) {
+        const photo = state.photos.get(pid);
+        if (!photo) continue;
+        idx += 1;
+        walkItems.push({ group: room, room, photo, indexInGroup: idx });
+      }
+    }
+
+    const chunkSize = compress ? walkItems.length : ORIGINALS_CHUNK;
+    const chunks = [];
+    for (let i = 0; i < walkItems.length; i += chunkSize) {
+      chunks.push(walkItems.slice(i, i + chunkSize));
+    }
+    const numParts = chunks.length;
+
     try {
-      toast(
-        compress
-          ? `Preparing ${total} photo${total === 1 ? "" : "s"}…`
-          : `Packaging ${total} original photo${total === 1 ? "" : "s"}…`
-      );
-      await yieldToUi();
-      const zip = new JSZip();
+      let doneOverall = 0;
+      for (let partIdx = 0; partIdx < numParts; partIdx++) {
+        const items = chunks[partIdx];
+        const partLabel = numParts > 1 ? ` (part ${partIdx + 1}/${numParts})` : "";
+        toast(
+          compress
+            ? `Preparing ${total} photo${total === 1 ? "" : "s"}…`
+            : `Packaging photos${partLabel}…`
+        );
+        await yieldToUi();
 
-      // First pass: walk photos one-at-a-time, converting to bytes and
-      // handing them to JSZip, then immediately dropping the data URL from
-      // our working set. Yielding between photos lets the browser service
-      // timers / touch events so iOS does not assume the PWA has hung.
-      const dirForGroup = new Map(); // group.id -> dir
-      const dirTaken = new Map(); // dir -> count
-      const photoPaths = new Map(); // photo.id -> "dir/name.jpg"
-      const uniqueDir = (base) => {
-        let dir = base;
-        const n = (dirTaken.get(dir) || 0) + 1;
-        dirTaken.set(dir, n);
-        if (n > 1) dir = `${dir}-${n}`;
-        return dir;
-      };
+        const zip = new JSZip();
+        const dirForGroup = new Map();
+        const dirTaken = new Map();
+        const photoPaths = new Map();
+        const uniqueDir = (base) => {
+          let dir = base;
+          const n = (dirTaken.get(dir) || 0) + 1;
+          dirTaken.set(dir, n);
+          if (n > 1) dir = `${dir}-${n}`;
+          return dir;
+        };
 
-      const walk = [];
-      for (const g of state.property.groups || []) walk.push({ group: g, room: null });
-      for (const room of state.property.rooms || []) walk.push({ group: room, room });
-
-      let done = 0;
-      for (const { group, room } of walk) {
-        if (!group.photoIds || !group.photoIds.length) continue;
-        let dir = dirForGroup.get(group.id);
-        if (!dir) {
-          if (room) {
-            const roomSlug = slugify(`${room.name || room.roomType} ${room.habitability}`);
-            dir = uniqueDir(`rooms/${roomSlug}`);
-          } else {
-            dir = uniqueDir(slugify(group.name));
+        for (const { group, room, photo, indexInGroup } of items) {
+          let dir = dirForGroup.get(group.id);
+          if (!dir) {
+            if (room) {
+              const roomSlug = slugify(`${room.name || room.roomType} ${room.habitability}`);
+              dir = uniqueDir(`rooms/${roomSlug}`);
+            } else {
+              dir = uniqueDir(slugify(group.name));
+            }
+            dirForGroup.set(group.id, dir);
           }
-          dirForGroup.set(group.id, dir);
-        }
-        const folder = zip.folder(dir);
-        let index = 0;
-        for (const pid of group.photoIds) {
-          const photo = state.photos.get(pid);
-          if (!photo) continue;
-          index += 1;
-          done += 1;
-          // In compressed mode we re-encode each photo to ~2200 px / q0.82
-          // before zipping so iOS PWAs with hundreds of photos don't blow
-          // their process memory budget. In originals mode we take the
-          // stored JPEG bytes as-is; either way EXIF (date / GPS) is
+          const folder = zip.folder(dir);
+          doneOverall += 1;
+          // Compressed mode re-encodes to ~2200 px / q0.82; originals mode
+          // zips the stored bytes. Either way EXIF (date / GPS) is
           // re-stamped so the saved file still carries metadata.
           let dataUrl = compress
             ? await reencodeForZip(photo.dataUrl)
             : photo.dataUrl;
           dataUrl = insertExifInto(dataUrl, photo);
           const bytes = dataUrlToBytes(dataUrl);
-          dataUrl = null; // drop the string reference immediately
+          dataUrl = null;
           const stamp = photo.takenAt || photo.uploadedAt || new Date().toISOString();
           const defectPrefix = photo.defect ? "DEFECT_" : "";
           const tagPrefix = room && photo.roomTag ? `${slugify(photo.roomTag)}_` : "";
-          const labelSlug = slugify(photo.label || `${group.name}-${index}`);
-          const name = `${defectPrefix}${tagPrefix}${String(index).padStart(2, "0")}_${labelSlug}.jpg`;
+          const labelSlug = slugify(photo.label || `${group.name}-${indexInGroup}`);
+          const name = `${defectPrefix}${tagPrefix}${String(indexInGroup).padStart(2, "0")}_${labelSlug}.jpg`;
           folder.file(name, bytes, { date: new Date(stamp) });
           photoPaths.set(photo.id, `${dir}/${name}`);
-          if (done % 4 === 0 || done === total) {
-            toast(`Packaging photos… ${done}/${total}`);
+          if (doneOverall % 4 === 0 || doneOverall === total) {
+            toast(`Packaging photos${partLabel}… ${doneOverall}/${total}`);
             await yieldToUi();
           }
         }
+
+        // HTML indices only go into the single-file (compressed) export —
+        // the chunked originals don't cleanly split into self-contained
+        // indices and users typically use the compressed ZIP for the
+        // browseable report anyway.
+        if (compress) {
+          try {
+            zip.file(
+              "index.html",
+              buildHtmlIndex(photoPaths, {
+                layout: "group",
+                otherHref: "index-by-tag.html",
+                otherLabel: "by tag (Main / Ext1–4)",
+              })
+            );
+            zip.file(
+              "index-by-tag.html",
+              buildHtmlIndex(photoPaths, {
+                layout: "tag",
+                otherHref: "index.html",
+                otherLabel: "by group",
+              })
+            );
+          } catch (err) {
+            console.warn("HTML index generation failed.", err);
+          }
+        } else if (numParts > 1) {
+          zip.file(
+            "README.txt",
+            `Retrofit Photos — originals export\n` +
+              `Part ${partIdx + 1} of ${numParts}\n` +
+              `Photos in this archive: ${items.length}\n` +
+              `Total photos in the property: ${total}\n`
+          );
+        }
+
+        toast(`Compressing ZIP${partLabel}…`);
+        await yieldToUi();
+        const zipBlob = await zip.generateAsync({ type: "blob", compression: "STORE" });
+        let suffix;
+        if (compress) {
+          suffix = "_photos.zip";
+        } else if (numParts > 1) {
+          suffix = `_photos_originals_part${partIdx + 1}_of_${numParts}.zip`;
+        } else {
+          suffix = "_photos_originals.zip";
+        }
+        saveBlob(zipBlob, `${reportBaseName()}${suffix}`);
+        // Give the browser a moment between downloads. iOS in particular
+        // can drop subsequent anchor clicks if they come back-to-back.
+        if (partIdx < numParts - 1) {
+          toast(`Part ${partIdx + 1}/${numParts} saved — starting next part…`);
+          await new Promise((r) => setTimeout(r, 800));
+        }
       }
-
-      // The PDF used to be built into the same ZIP, but on properties with
-      // 200+ photos its jsPDF buffer plus all the photo bytes pushes the
-      // iOS PWA over its memory ceiling. Skip it here — the user can tap
-      // Download PDF separately, which streams straight to disk. The HTML
-      // indices below give an equivalent offline report.
-
-      // Lightweight HTML indices referencing the same photo files by
-      // relative path. Two layouts; each cross-links to the other.
-      try {
-        zip.file(
-          "index.html",
-          buildHtmlIndex(photoPaths, {
-            layout: "group",
-            otherHref: "index-by-tag.html",
-            otherLabel: "by tag (Main / Ext1–4)",
-          })
-        );
-        zip.file(
-          "index-by-tag.html",
-          buildHtmlIndex(photoPaths, {
-            layout: "tag",
-            otherHref: "index.html",
-            otherLabel: "by group",
-          })
-        );
-      } catch (err) {
-        console.warn("HTML index generation failed.", err);
-      }
-
-      toast("Compressing ZIP…");
-      await yieldToUi();
-      const zipBlob = await zip.generateAsync({ type: "blob", compression: "STORE" });
-      const suffix = compress ? "_photos.zip" : "_photos_originals.zip";
-      saveBlob(zipBlob, `${reportBaseName()}${suffix}`);
-      toast("Photos ZIP saved.");
+      toast(
+        numParts > 1
+          ? `All ${numParts} parts saved.`
+          : "Photos ZIP saved."
+      );
     } catch (err) {
       console.error(err);
       toast(err.message || "Failed to build photos ZIP.", "err");

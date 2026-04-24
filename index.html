@@ -259,10 +259,11 @@
           the batch to your camera roll. <strong>Download ZIP (compressed)</strong>
           is the safe default — photos are re-encoded a little smaller so very
           large jobs still fit within iOS in-app memory.
-          <strong>Download ZIP (originals)</strong> keeps every photo at capture
-          quality; on iPhone as an installed app this may fail on very large
-          properties (rough rule of thumb: 150+ photos). If it does, fall back
-          to the compressed ZIP or the ↓ save button on individual thumbnails.
+          <strong>Download ZIP (originals)</strong> keeps every photo at
+          capture quality. Very large jobs are split automatically into
+          parts of up to 100 photos so each archive stays inside iOS
+          in-app memory — you'll get one download per part. The ↓ button
+          on any thumbnail always saves a single photo at full fidelity.
         </p>
         <button class="btn btn-ghost-dark" id="export-photos-cancel" type="button">Cancel</button>
       </div>
