@@ -3168,6 +3168,32 @@
     };
   }
 
+  // Build a compact one-line summary of an AI analysis for the PDF caption.
+  function pdfSummariseAnalysis(a) {
+    const d = (a && a.data) || {};
+    const bits = [];
+    if (d.make || d.model) {
+      bits.push([d.make, d.model].filter(Boolean).join(" "));
+    }
+    if (a.preset === "boiler") {
+      if (d.type) bits.push(d.type);
+      if (d.fuel) bits.push(d.fuel);
+      if (d.installed_year) bits.push(`installed ${d.installed_year}`);
+      if (d.output_kw) bits.push(`${d.output_kw} kW`);
+      if (d.efficiency_rating) bits.push(d.efficiency_rating);
+    } else {
+      if (typeof d.is_smart_meter === "boolean") {
+        bits.push(d.is_smart_meter ? "smart" : "not smart");
+      }
+      if (d.smets_generation) bits.push(d.smets_generation);
+      if (d.is_export_capable === true) bits.push("export-capable");
+      if (d.is_export_capable === false) bits.push("not export-capable");
+      if (d.current_reading) bits.push(`reading ${d.current_reading}`);
+      if (d.serial) bits.push(`s/n ${d.serial}`);
+    }
+    return bits.length ? bits.join(", ") : "no identifying details";
+  }
+
   // -------------------- PDF export with linked contents --------------------
   function reportBaseName() {
     const meta = state.property.meta;
@@ -3472,7 +3498,41 @@
         }
         doc.setTextColor(0);
 
-        cursorY += drawH + capH + 18;
+        // One short line per AI analysis, just below the caption block.
+        // Non-invasive: if the photo has no analyses the cursor advance is
+        // unchanged, so pagination math is only affected on analysed photos.
+        let extraCap = 0;
+        if (Array.isArray(photo.analyses) && photo.analyses.length) {
+          const analysesBaseY = cursorY + drawH + capH + 2;
+          let lineY = analysesBaseY;
+          doc.setFontSize(9);
+          for (const a of photo.analyses) {
+            const preset = getAnalysisPreset(a.preset);
+            const header = `AI analysis — ${preset ? preset.label : a.preset}`;
+            const summary = pdfSummariseAnalysis(a);
+            const conf = a.data && a.data.confidence ? ` (${a.data.confidence})` : "";
+            const firstLine = `${header}${conf}: ${summary}`;
+            const wrapped = doc.splitTextToSize(firstLine, pageW - margin * 2);
+            doc.setTextColor(120, 82, 9); // amber-700-ish
+            for (const ln of wrapped) {
+              doc.text(ln, margin, lineY);
+              lineY += 11;
+            }
+            if (a.data && a.data.notes) {
+              doc.setTextColor(110);
+              const noteWrap = doc.splitTextToSize(`Notes: ${a.data.notes}`, pageW - margin * 2);
+              for (const ln of noteWrap) {
+                doc.text(ln, margin, lineY);
+                lineY += 11;
+              }
+            }
+          }
+          doc.setFontSize(10);
+          doc.setTextColor(40);
+          extraCap = lineY - analysesBaseY + 4;
+        }
+
+        cursorY += drawH + capH + 18 + extraCap;
 
         const isLast = entry === iterator[iterator.length - 1];
         if (!isLast && cursorY + 180 > pageH - margin) {
@@ -3812,6 +3872,18 @@
       const path = photoPaths.get(photo.id);
       if (!path) return null;
       const takenIso = photo.takenAt || photo.uploadedAt || null;
+      const analyses = Array.isArray(photo.analyses)
+        ? photo.analyses.map((a) => {
+            const preset = getAnalysisPreset(a.preset);
+            return {
+              preset: a.preset,
+              presetLabel: preset ? preset.label : a.preset,
+              model: a.model,
+              generatedAt: a.generatedAt,
+              data: a.data || {},
+            };
+          })
+        : [];
       photoData[photo.id] = {
         src: path,
         label: photo.label || "",
@@ -3822,6 +3894,7 @@
         dateStr: takenIso ? new Date(takenIso).toLocaleString() : "",
         gpsText: photo.gps ? formatGps(photo.gps) : "",
         uploaded: photo.source === "upload",
+        analyses,
       };
       return { id: photo.id };
     };
@@ -3897,6 +3970,20 @@ body{display:flex;flex-direction:column}
 .badge-defect{background:rgba(178,45,45,0.35);color:#ffd4d4;border-color:rgba(255,107,107,0.55)}
 .badge-tag{background:rgba(245,158,11,0.2);color:#f8c464;border-color:rgba(245,158,11,0.45)}
 .badge-building{background:rgba(255,255,255,0.12);color:#fff}
+.badge-ai{background:rgba(245,158,11,0.28);color:#f8c464;border-color:rgba(245,158,11,0.6);font-weight:700}
+.stage-analyses{position:absolute;top:60px;right:18px;max-width:min(340px,38%);display:flex;flex-direction:column;gap:8px;z-index:4;pointer-events:auto;max-height:calc(100% - 140px);overflow-y:auto}
+.stage-analyses:empty{display:none}
+.stage-analysis{background:rgba(22,22,22,0.82);border:1px solid rgba(255,255,255,0.1);border-left:3px solid #f59e0b;border-radius:8px;padding:10px 12px;color:#e2ddd3;font-size:0.82rem;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.stage-analysis.conf-low{border-left-color:#d97706}
+.stage-analysis.conf-medium{border-left-color:#facc15}
+.stage-analysis.conf-high{border-left-color:#f59e0b}
+.stage-analysis-title{font-weight:700;color:#f59e0b;font-size:0.9rem;display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.stage-analysis-conf{font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;padding:2px 7px;border-radius:999px;background:rgba(245,158,11,0.2);color:#f8c464}
+.stage-analysis dl{margin:0;display:grid;grid-template-columns:max-content 1fr;gap:2px 10px;font-size:0.78rem}
+.stage-analysis dt{color:rgba(255,255,255,0.55)}
+.stage-analysis dd{margin:0;color:#fff}
+.stage-analysis-notes{margin:6px 0 0;font-size:0.76rem;color:rgba(255,255,255,0.75);line-height:1.35}
+@media (max-width:900px){.stage-analyses{position:static;margin:10px 10px 0;max-width:none;max-height:none}}
 .caption{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);padding:8px 14px;border-radius:10px;background:rgba(0,0,0,0.55);color:#e7e3db;font-size:0.82rem;max-width:90%;text-align:center;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:4}
 .caption .counter{color:#9a948a;margin-left:8px;font-weight:600}
 .filmstrip{grid-area:filmstrip;display:flex;gap:6px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:#121212;border-top:1px solid #262626;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity;scrollbar-width:thin;scrollbar-color:#2f2f2f #121212}
@@ -4024,6 +4111,9 @@ body{display:flex;flex-direction:column}
     if (p.defect) el.badges.appendChild(badge("Defect", "badge badge-defect"));
     if (p.roomTag) el.badges.appendChild(badge(p.roomTag, "badge badge-tag"));
     if (p.building) el.badges.appendChild(badge(p.building, "badge badge-building"));
+    if (Array.isArray(p.analyses) && p.analyses.length) {
+      el.badges.appendChild(badge(p.analyses.length > 1 ? "AI × " + p.analyses.length : "AI", "badge badge-ai"));
+    }
 
     var pieces = [];
     if (p.source) pieces.push(p.source);
@@ -4038,8 +4128,68 @@ body{display:flex;flex-direction:column}
     counter.textContent = "(" + (state.idx + 1) + "/" + state.photoIds.length + ")";
     el.caption.appendChild(counter);
 
+    renderStageAnalyses(p);
+
     el.prev.disabled = state.idx === 0;
     el.next.disabled = state.idx === state.photoIds.length - 1;
+  }
+
+  function renderStageAnalyses(p) {
+    if (!el.analyses) return;
+    el.analyses.innerHTML = "";
+    if (!Array.isArray(p.analyses) || !p.analyses.length) return;
+    var friendly = {
+      make: "Make",
+      model: "Model",
+      serial: "Serial",
+      is_smart_meter: "Smart meter",
+      smets_generation: "SMETS",
+      is_export_capable: "Export capable",
+      current_reading: "Reading",
+      type: "Type",
+      fuel: "Fuel",
+      installed_year: "Installed",
+      efficiency_rating: "Efficiency",
+      output_kw: "Output (kW)"
+    };
+    for (var i = 0; i < p.analyses.length; i++) {
+      var a = p.analyses[i];
+      var d = a.data || {};
+      var card = document.createElement("div");
+      card.className = "stage-analysis";
+      if (d.confidence) card.className += " conf-" + d.confidence;
+      var title = document.createElement("div");
+      title.className = "stage-analysis-title";
+      title.textContent = a.presetLabel || a.preset;
+      if (d.confidence) {
+        var conf = document.createElement("span");
+        conf.className = "stage-analysis-conf";
+        conf.textContent = d.confidence;
+        title.appendChild(conf);
+      }
+      card.appendChild(title);
+      var dl = document.createElement("dl");
+      for (var key in friendly) {
+        if (!Object.prototype.hasOwnProperty.call(d, key)) continue;
+        var v = d[key];
+        if (v === null || v === undefined || v === "") continue;
+        if (typeof v === "boolean") v = v ? "Yes" : "No";
+        var dt = document.createElement("dt");
+        dt.textContent = friendly[key];
+        var dd = document.createElement("dd");
+        dd.textContent = String(v);
+        dl.appendChild(dt);
+        dl.appendChild(dd);
+      }
+      if (dl.childNodes.length) card.appendChild(dl);
+      if (d.notes) {
+        var notes = document.createElement("p");
+        notes.className = "stage-analysis-notes";
+        notes.textContent = d.notes;
+        card.appendChild(notes);
+      }
+      el.analyses.appendChild(card);
+    }
   }
 
   function badge(text, cls) {
@@ -4095,6 +4245,7 @@ body{display:flex;flex-direction:column}
     el.img = $(".main-img");
     el.caption = $(".caption");
     el.badges = $(".badges");
+    el.analyses = $(".stage-analyses");
     el.filmstrip = $(".filmstrip");
     el.prev = $(".prev");
     el.next = $(".next");
@@ -4157,6 +4308,7 @@ body{display:flex;flex-direction:column}
   <div class="stage">
     <button class="nav-btn prev" type="button" aria-label="Previous">&#x2039;</button>
     <div class="stage-img-wrap"><img class="main-img" alt=""></div>
+    <div class="stage-analyses" aria-label="AI analyses for this photo"></div>
     <button class="nav-btn next" type="button" aria-label="Next">&#x203A;</button>
     <div class="badges"></div>
     <div class="caption"></div>
