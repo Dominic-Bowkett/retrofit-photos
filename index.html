@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css?v=3" />
   </head>
   <body>
     <header class="app-header">
@@ -205,15 +205,15 @@
             <legend class="room-lights-legend">Lights</legend>
             <label class="room-light">
               <span class="room-light-label">LED</span>
-              <input type="number" class="room-light-input" data-light="led" min="0" max="999" step="1" maxlength="3" inputmode="numeric" placeholder="0" />
+              <input type="number" class="room-light-input" data-light="led" min="0" max="999" step="1" maxlength="3" inputmode="numeric" />
             </label>
             <label class="room-light">
               <span class="room-light-label">CFL</span>
-              <input type="number" class="room-light-input" data-light="cfl" min="0" max="999" step="1" maxlength="3" inputmode="numeric" placeholder="0" />
+              <input type="number" class="room-light-input" data-light="cfl" min="0" max="999" step="1" maxlength="3" inputmode="numeric" />
             </label>
             <label class="room-light">
               <span class="room-light-label">Incand.</span>
-              <input type="number" class="room-light-input" data-light="incandescent" min="0" max="999" step="1" maxlength="3" inputmode="numeric" placeholder="0" />
+              <input type="number" class="room-light-input" data-light="incandescent" min="0" max="999" step="1" maxlength="3" inputmode="numeric" />
             </label>
           </fieldset>
           <div class="room-photos">
@@ -434,6 +434,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
-    <script src="app.js"></script>
+    <script src="app.js?v=3"></script>
   </body>
 </html>

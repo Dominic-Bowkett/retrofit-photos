@@ -1573,18 +1573,27 @@ input[type="date"]:focus {
 
 .room-lights {
   margin: 0;
+  /* Reset the user-agent fieldset so we can control the layout directly. */
+  min-width: 0;
   padding: 8px 12px 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--accent-softer);
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 10px;
-  align-items: flex-end;
+  /* Grid keeps the three inputs on a single row even on narrow phones —
+     on Android Chrome a flex fieldset with a <legend> can promote the
+     legend to a flex item and push the inputs onto two rows. */
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  justify-content: start;
+  align-items: end;
+  column-gap: 10px;
+  row-gap: 0;
 }
 
 .room-lights-legend {
+  grid-column: 1 / -1;
   padding: 0 6px;
+  margin: 0 0 6px;
   font-size: 0.78rem;
   font-weight: 700;
   color: var(--accent-ink);
