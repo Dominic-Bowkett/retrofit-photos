@@ -1874,6 +1874,166 @@ input[type="date"]:focus {
   border-color: var(--accent);
 }
 
+.room-windows-size-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+.room-windows-size {
+  flex: 1 1 130px;
+  min-width: 110px;
+}
+
+.room-windows-size input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.room-windows-size input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.btn-capture-laser {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------- Laser-screen picker dialog ---------- */
+.laser-picker-card {
+  max-width: 480px;
+  width: 100%;
+}
+
+.laser-picker-status {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.laser-picker-target {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.laser-picker-slot {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--accent-softer);
+}
+
+.laser-picker-slot-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+}
+
+.laser-picker-slot-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.laser-picker-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.laser-picker-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.laser-picker-item.is-active {
+  border-color: var(--accent);
+  background: var(--accent-softer);
+}
+
+.laser-picker-pick {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  background: transparent;
+  border: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.laser-picker-display {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.laser-picker-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.laser-picker-assigns {
+  display: flex;
+  gap: 6px;
+}
+
+.laser-picker-assign {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.laser-picker-assign:hover {
+  background: var(--accent-softer);
+  border-color: var(--accent-border);
+  color: var(--accent-ink);
+}
+
 /* ---------- Room notes ---------- */
 .room-notes {
   display: flex;

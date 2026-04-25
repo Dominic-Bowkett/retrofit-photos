@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="stylesheet" href="style.css?v=12" />
+    <link rel="stylesheet" href="style.css?v=13" />
   </head>
   <body>
     <header class="app-header">
@@ -342,6 +342,20 @@
                 <button type="button" class="room-windows-gap-btn" data-gap="16mm" aria-pressed="false">16mm</button>
               </div>
             </div>
+            <div class="room-windows-size-row">
+              <label class="room-windows-field room-windows-size">
+                <span class="room-windows-label">Width</span>
+                <input type="text" class="room-windows-width" inputmode="decimal" placeholder="e.g. 1.250 m" />
+              </label>
+              <label class="room-windows-field room-windows-size">
+                <span class="room-windows-label">Height</span>
+                <input type="text" class="room-windows-height" inputmode="decimal" placeholder="e.g. 1.500 m" />
+              </label>
+              <button type="button" class="btn btn-primary-soft btn-capture-laser" title="Take a photo of the laser measurer's screen and pick width/height from the readings">
+                <span aria-hidden="true">📷</span>
+                <span>Capture from laser</span>
+              </button>
+            </div>
           </fieldset>
           <label class="room-notes">
             <span class="room-counts-legend">Notes</span>
@@ -420,6 +434,33 @@
         </div>
         <div class="lightbox-analyses" id="lightbox-analyses" aria-label="Photo analyses"></div>
       </footer>
+    </div>
+
+    <div id="laser-picker-dialog" class="dialog" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="laser-picker-title">
+      <div class="dialog-backdrop" id="laser-picker-backdrop"></div>
+      <div class="dialog-card laser-picker-card">
+        <h2 id="laser-picker-title">Pick measurements</h2>
+        <p class="laser-picker-status" id="laser-picker-status">Reading the laser screen…</p>
+        <div class="laser-picker-target" id="laser-picker-target" hidden>
+          <div class="laser-picker-slot">
+            <span class="laser-picker-slot-label">Width</span>
+            <span class="laser-picker-slot-value" id="laser-picker-width">—</span>
+          </div>
+          <div class="laser-picker-slot">
+            <span class="laser-picker-slot-label">Height</span>
+            <span class="laser-picker-slot-value" id="laser-picker-height">—</span>
+          </div>
+        </div>
+        <ul class="laser-picker-list" id="laser-picker-list"></ul>
+        <div class="dialog-actions">
+          <button class="btn btn-primary" id="laser-picker-save" type="button" disabled>Save</button>
+          <button class="btn btn-ghost-dark" id="laser-picker-cancel" type="button">Cancel</button>
+        </div>
+        <p class="dialog-help">
+          Tap a reading then tap <strong>Width</strong> or <strong>Height</strong> to assign it. The captured photo is kept
+          with this room as evidence. If the readings look wrong, cancel and re-capture.
+        </p>
+      </div>
     </div>
 
     <div id="pdf-layout-dialog" class="dialog" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="pdf-layout-title">
@@ -565,6 +606,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
-    <script src="app.js?v=12"></script>
+    <script src="app.js?v=13"></script>
   </body>
 </html>

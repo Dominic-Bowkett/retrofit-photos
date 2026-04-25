@@ -157,6 +157,30 @@
       required: ["make", "model", "type", "notes", "confidence"],
       additionalProperties: false,
     },
+    laser_measurement: {
+      type: "object",
+      properties: {
+        measurements: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              display: { type: "string" },
+              value: { type: ["number", "null"] },
+              unit: { type: ["string", "null"] },
+              role_hint: { type: ["string", "null"] },
+              confidence: { type: "string", enum: ["high", "medium", "low"] },
+            },
+            required: ["display", "confidence"],
+            additionalProperties: false,
+          },
+        },
+        primary_index: { type: ["number", "null"] },
+        notes: { type: "string" },
+      },
+      required: ["measurements", "notes"],
+      additionalProperties: false,
+    },
   };
 
   const ANALYSIS_PRESETS = [
@@ -223,6 +247,30 @@
       userPrompt:
         "Analyse this boiler photo. Identify the model, then add a manual URL if you're confident it exists. Return JSON matching the schema.",
       schema: ANALYSIS_SCHEMAS.boiler,
+    },
+    {
+      id: "laser_measurement",
+      label: "Laser measurer screen",
+      shortLabel: "Laser screen",
+      systemPrompt:
+        "You are reading the LCD screen of a handheld laser distance measurer (Bosch PLR / GLM, Leica DISTO, " +
+        "DeWalt, Stanley, etc.) in a photo.\n\n" +
+        "Extract EVERY numeric reading visible on the screen. For each reading, return:\n" +
+        "- display: the value EXACTLY as printed on the screen, including the unit (e.g. \"1.275 m\", \"0.842 m\", \"3' 6\\\"\").\n" +
+        "- value: the numeric value as a number (e.g. 1.275). null if you can't parse it cleanly.\n" +
+        "- unit: the unit shown (\"m\", \"cm\", \"mm\", \"ft\", \"in\"). null if not visible.\n" +
+        "- role_hint: a short description of where on the screen the number appears, e.g. " +
+        "\"main display\", \"history line 1\", \"history line 2\", \"min\", \"max\", \"sum\", \"area\", \"volume\". null if unclear.\n" +
+        "- confidence: high / medium / low for THIS reading.\n\n" +
+        "Return them in display order — the largest / main reading first, then any history / sub-readings. " +
+        "Set primary_index to the index of the most prominent reading (0-based) or null if ambiguous. " +
+        "Use the notes field for anything that affects interpretation (glare, partial occlusion, mode like \"Pythagoras\", " +
+        "device make/model if obvious). DO NOT invent readings — if the screen isn't legible, return an empty measurements array.",
+      userPrompt:
+        "This is a photo of a laser distance measurer's LCD screen. List every numeric reading visible, " +
+        "exactly as printed (with units), so the assessor can pick which one is the width and which is the height. " +
+        "Return JSON matching the schema.",
+      schema: ANALYSIS_SCHEMAS.laser_measurement,
     },
   ];
   // Storage / export quality: keep individual exported images at near-original
@@ -1014,7 +1062,7 @@
       chimneys: { open: 0, blocked: 0 },
       flues: { open: 0, closed: 0, boiler: 0, other: 0 },
       ventilation: { trickle: 0, core: 0, iev: 0, dmev: 0 },
-      windows: { type: "Double", age: "", gap: "", frame: "" },
+      windows: { type: "Double", age: "", gap: "", frame: "", width: "", height: "" },
       notes: "",
     };
   }
@@ -1088,6 +1136,8 @@
     const age = WINDOW_AGES.includes(src.age) ? src.age : "";
     const gap = WINDOW_GAPS.includes(src.gap) ? src.gap : "";
     const frame = WINDOW_FRAMES.includes(src.frame) ? src.frame : "";
+    const width = typeof src.width === "string" ? src.width : "";
+    const height = typeof src.height === "string" ? src.height : "";
     // Drop fields that aren't currently relevant so stale state can't
     // resurface if the user toggles age / type back later. Glazing gap
     // is only meaningful on Double / Triple glazing where the age is
@@ -1096,12 +1146,14 @@
       WINDOW_AGES_NEEDING_GAP.has(age) && WINDOW_TYPES_NEEDING_FRAME.has(type);
     const effectiveGap = gapAllowed ? gap : "";
     const effectiveFrame = WINDOW_TYPES_NEEDING_FRAME.has(type) ? frame : "";
-    const out = { type, age, gap: effectiveGap, frame: effectiveFrame };
+    const out = { type, age, gap: effectiveGap, frame: effectiveFrame, width, height };
     if (
       src.type !== out.type ||
       src.age !== out.age ||
       src.gap !== out.gap ||
-      src.frame !== out.frame
+      src.frame !== out.frame ||
+      src.width !== out.width ||
+      src.height !== out.height
     ) {
       changed = true;
     }
@@ -2121,6 +2173,35 @@
       applyVisibility();
       applyGapButtons();
 
+      // Width / Height free-text inputs (with optional laser-screen capture).
+      const winWidth = winRoot.querySelector(".room-windows-width");
+      const winHeight = winRoot.querySelector(".room-windows-height");
+      if (winWidth) {
+        winWidth.value = room.windows.width || "";
+        winWidth.addEventListener("input", () => {
+          room.windows.width = winWidth.value;
+          rememberWindowDefaults(room.windows);
+          saveProperty();
+        });
+        winWidth.addEventListener("click", (e) => e.stopPropagation());
+      }
+      if (winHeight) {
+        winHeight.value = room.windows.height || "";
+        winHeight.addEventListener("input", () => {
+          room.windows.height = winHeight.value;
+          rememberWindowDefaults(room.windows);
+          saveProperty();
+        });
+        winHeight.addEventListener("click", (e) => e.stopPropagation());
+      }
+      const captureBtn = winRoot.querySelector(".btn-capture-laser");
+      if (captureBtn) {
+        captureBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          startLaserCapture(room);
+        });
+      }
+
       winType.addEventListener("change", () => {
         room.windows.type = winType.value;
         commitWindows();
@@ -3065,6 +3146,9 @@
     facingMode: "environment",
     group: null,
     buffer: [],
+    // When set, the next committed photo from this camera session triggers
+    // the laser-screen analysis flow rather than the normal evidence flow.
+    pendingLaserCapture: null,
     els: {
       overlay: document.getElementById("camera-overlay"),
       video: document.getElementById("camera-video"),
@@ -3192,6 +3276,10 @@
 
     if (save && camera.buffer.length && camera.group) {
       commitBufferedPhotos(camera.group, camera.buffer);
+    } else {
+      // Cancel-without-save → drop any pending laser-capture so the next
+      // ordinary photo doesn't accidentally trigger the picker.
+      camera.pendingLaserCapture = null;
     }
     camera.buffer = [];
     camera.group = null;
@@ -3274,6 +3362,15 @@
     const owner = findGroupById(group.id);
     const isRoomPhoto = !!(owner && owner.room);
     if (isRoomPhoto) expandRoom(owner.room);
+    // Pre-stamp laser-capture photos with the right tag so they file
+    // alongside the room's other window evidence when filtered by tag.
+    const laserCapture = camera.pendingLaserCapture;
+    camera.pendingLaserCapture = null;
+    if (laserCapture && photos.length) {
+      for (const p of photos) {
+        if (!p.roomTag) p.roomTag = "Windows";
+      }
+    }
     for (const photo of photos) {
       photo.propertyId = state.property.id;
       photo.label = `${group.name} — ${group.photoIds.length + 1}`;
@@ -3291,6 +3388,15 @@
     updateExportButton();
     saveProperty();
     toast(`Added ${photos.length} photo${photos.length === 1 ? "" : "s"} to ${group.name}.`);
+
+    if (laserCapture && photos.length && isRoomPhoto && owner.room.id === laserCapture.roomId) {
+      // Run the laser-screen analysis on the most recent photo and pop
+      // the picker dialog so the user can assign width / height.
+      runLaserPicker(owner.room, photos[photos.length - 1]).catch((err) => {
+        console.error("laser picker failed", err);
+        toast(err && err.message ? err.message : "Couldn't read the laser screen.", "err");
+      });
+    }
   }
 
   camera.els.shutter.addEventListener("click", captureFrame);
@@ -3602,6 +3708,158 @@
       generatedAt: new Date().toISOString(),
       data,
     };
+  }
+
+  // -------------------- Laser-measurer screen capture --------------------
+  // Flow: user taps "Capture from laser" in a room's Windows fieldset →
+  // we open the camera with a pendingLaserCapture marker → after the
+  // photo commits, runLaserPicker analyses it with the laser_measurement
+  // preset and pops the picker dialog.
+  function startLaserCapture(room) {
+    const apiKey = getClaudeApiKey();
+    if (!apiKey) {
+      toast("Set a Claude API key in Settings before capturing from the laser screen.", "err");
+      return;
+    }
+    camera.pendingLaserCapture = { roomId: room.id };
+    openCamera(room);
+  }
+
+  async function runLaserPicker(room, photo) {
+    const dlg = document.getElementById("laser-picker-dialog");
+    const status = document.getElementById("laser-picker-status");
+    const list = document.getElementById("laser-picker-list");
+    const target = document.getElementById("laser-picker-target");
+    const widthSlot = document.getElementById("laser-picker-width");
+    const heightSlot = document.getElementById("laser-picker-height");
+    const saveBtn = document.getElementById("laser-picker-save");
+    const cancelBtn = document.getElementById("laser-picker-cancel");
+    const backdrop = document.getElementById("laser-picker-backdrop");
+    if (!dlg || !list || !widthSlot || !heightSlot || !saveBtn || !cancelBtn || !status || !target) return;
+
+    const open = () => {
+      dlg.hidden = false;
+      dlg.setAttribute("aria-hidden", "false");
+    };
+    const close = () => {
+      dlg.hidden = true;
+      dlg.setAttribute("aria-hidden", "true");
+    };
+
+    // Reset UI.
+    list.innerHTML = "";
+    target.hidden = true;
+    widthSlot.textContent = "—";
+    heightSlot.textContent = "—";
+    saveBtn.disabled = true;
+    status.textContent = "Reading the laser screen…";
+    open();
+
+    let analysis;
+    try {
+      analysis = await runPhotoAnalysis(photo, "laser_measurement");
+    } catch (err) {
+      status.textContent = err && err.message ? err.message : "Couldn't read the laser screen.";
+      saveBtn.disabled = true;
+      // Leave dialog open so the user sees the error and can cancel.
+      cancelBtn.onclick = close;
+      backdrop.onclick = close;
+      return;
+    }
+
+    // Persist the analysis on the photo so it's visible in the Analysis
+    // view and the lightbox like any other AI run.
+    if (!Array.isArray(photo.analyses)) photo.analyses = [];
+    photo.analyses.push(analysis);
+    try {
+      await savePhotoNow(photo);
+    } catch (err) {
+      console.error(err);
+    }
+
+    const measurements = (analysis.data && Array.isArray(analysis.data.measurements))
+      ? analysis.data.measurements
+      : [];
+    if (!measurements.length) {
+      status.textContent = "No readings detected on the screen. Try a closer, glare-free shot.";
+      cancelBtn.onclick = close;
+      backdrop.onclick = close;
+      return;
+    }
+    status.textContent = "Tap a reading then assign it to Width or Height.";
+
+    const picked = { width: null, height: null };
+    let activeIdx = -1;
+
+    const refreshSlots = () => {
+      target.hidden = false;
+      widthSlot.textContent = picked.width ? picked.width.display : "—";
+      heightSlot.textContent = picked.height ? picked.height.display : "—";
+      saveBtn.disabled = !(picked.width || picked.height);
+    };
+
+    const renderList = () => {
+      list.innerHTML = "";
+      measurements.forEach((m, i) => {
+        const item = document.createElement("li");
+        item.className = "laser-picker-item";
+        if (i === activeIdx) item.classList.add("is-active");
+        const display = m.display || "?";
+        const role = m.role_hint ? ` · ${m.role_hint}` : "";
+        const conf = m.confidence ? `<span class="analysis-chip analysis-chip-${m.confidence}">${m.confidence}</span>` : "";
+        item.innerHTML = `
+          <button type="button" class="laser-picker-pick">
+            <span class="laser-picker-display">${escapeHtml(display)}</span>
+            <span class="laser-picker-meta">${escapeHtml(role)}</span>
+            ${conf}
+          </button>
+          <div class="laser-picker-assigns">
+            <button type="button" class="laser-picker-assign" data-slot="width">Width</button>
+            <button type="button" class="laser-picker-assign" data-slot="height">Height</button>
+          </div>
+        `;
+        const pickBtn = item.querySelector(".laser-picker-pick");
+        pickBtn.addEventListener("click", () => {
+          activeIdx = i;
+          renderList();
+        });
+        item.querySelectorAll(".laser-picker-assign").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const slot = btn.dataset.slot;
+            if (slot !== "width" && slot !== "height") return;
+            // Each measurement can only own one slot; clear the other if reassigning.
+            for (const k of ["width", "height"]) {
+              if (picked[k] && picked[k].__idx === i && k !== slot) picked[k] = null;
+            }
+            picked[slot] = { display, value: m.value, unit: m.unit, __idx: i };
+            refreshSlots();
+          });
+        });
+        list.appendChild(item);
+      });
+    };
+
+    renderList();
+
+    saveBtn.onclick = () => {
+      if (picked.width) room.windows.width = picked.width.display;
+      if (picked.height) room.windows.height = picked.height.display;
+      normalizeRoomWindows(room);
+      rememberWindowDefaults(room.windows);
+      saveProperty();
+      // Refresh the visible inputs in the room card.
+      const node = document.querySelector(`[data-room-id="${room.id}"]`);
+      if (node) {
+        const w = node.querySelector(".room-windows-width");
+        const h = node.querySelector(".room-windows-height");
+        if (w) w.value = room.windows.width;
+        if (h) h.value = room.windows.height;
+      }
+      close();
+      toast("Window measurements saved.");
+    };
+    cancelBtn.onclick = close;
+    backdrop.onclick = close;
   }
 
   // Generate a short label for a photo via Claude. The owning section
