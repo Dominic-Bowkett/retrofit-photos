@@ -1011,6 +1011,7 @@
       photoIds: [],
       lights: { led: 0, cfl: 0, incandescent: 0 },
       chimneys: { open: 0, blocked: 0 },
+      flues: { open: 0, closed: 0, boiler: 0, other: 0 },
     };
   }
 
@@ -1023,6 +1024,13 @@
   const CHIMNEY_KINDS = [
     { key: "open", label: "Open" },
     { key: "blocked", label: "Blocked" },
+  ];
+
+  const FLUE_KINDS = [
+    { key: "open", label: "Open" },
+    { key: "closed", label: "Closed" },
+    { key: "boiler", label: "Boiler" },
+    { key: "other", label: "Other" },
   ];
 
   function normalizeRoomCounts(room, prop, kinds) {
@@ -1045,6 +1053,10 @@
 
   function normalizeRoomChimneys(room) {
     return normalizeRoomCounts(room, "chimneys", CHIMNEY_KINDS);
+  }
+
+  function normalizeRoomFlues(room) {
+    return normalizeRoomCounts(room, "flues", FLUE_KINDS);
   }
 
   function migrateRooms(property, photosMap) {
@@ -1105,6 +1117,7 @@
       }
       if (normalizeRoomLights(room)) changed = true;
       if (normalizeRoomChimneys(room)) changed = true;
+      if (normalizeRoomFlues(room)) changed = true;
       if (typeof room.heated !== "boolean") {
         room.heated = true;
         changed = true;
@@ -1780,6 +1793,7 @@
     let heated = 0, unheated = 0;
     let led = 0, cfl = 0, inc = 0;
     let chimOpen = 0, chimBlocked = 0;
+    let flueOpen = 0, flueClosed = 0, flueBoiler = 0, flueOther = 0;
     for (const r of rooms) {
       if (r.habitability === "Habitable") {
         if (r.heated === false) unheated++;
@@ -1792,6 +1806,11 @@
       const c = r.chimneys || {};
       chimOpen += Number(c.open) || 0;
       chimBlocked += Number(c.blocked) || 0;
+      const f = r.flues || {};
+      flueOpen += Number(f.open) || 0;
+      flueClosed += Number(f.closed) || 0;
+      flueBoiler += Number(f.boiler) || 0;
+      flueOther += Number(f.other) || 0;
     }
     const set = (id, n) => {
       const el = document.getElementById(id);
@@ -1804,6 +1823,10 @@
     set("totals-lights-incandescent", inc);
     set("totals-chimneys-open", chimOpen);
     set("totals-chimneys-blocked", chimBlocked);
+    set("totals-flues-open", flueOpen);
+    set("totals-flues-closed", flueClosed);
+    set("totals-flues-boiler", flueBoiler);
+    set("totals-flues-other", flueOther);
   }
 
   function expandRoom(room) {
@@ -1931,6 +1954,7 @@
 
     normalizeRoomLights(room);
     normalizeRoomChimneys(room);
+    normalizeRoomFlues(room);
     // Both the Lights and Chimneys fieldsets render the same kind of
     // numeric input — wire them up uniformly via data-count="<bucket>"
     // and data-key="<key>" so the bucket grows by adding HTML alone.
