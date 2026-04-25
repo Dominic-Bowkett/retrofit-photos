@@ -1401,8 +1401,43 @@ input[type="date"]:focus {
 }
 
 /* ---------- Totals card ---------- */
+.totals-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  padding: 2px 0;
+}
+
+.totals-header:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.totals-chevron {
+  line-height: 1;
+  color: var(--muted);
+  font-size: 0.95rem;
+  transition: transform 0.18s ease;
+}
+
+.totals-card.collapsed .totals-chevron {
+  transform: rotate(-90deg);
+}
+
+.totals-card.collapsed .totals-header {
+  margin-bottom: 0;
+}
+
+.totals-card.collapsed .totals-grid {
+  display: none;
+}
+
 .totals-card-title {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 1rem;
   font-weight: 600;
   color: var(--ink);

@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="stylesheet" href="style.css?v=6" />
+    <link rel="stylesheet" href="style.css?v=7" />
   </head>
   <body>
     <header class="app-header">
@@ -83,8 +83,11 @@
       </section>
 
       <section class="card totals-card" id="totals-card" aria-label="Property totals">
-        <h2 class="totals-card-title">Totals</h2>
-        <div class="totals-grid">
+        <div class="totals-header" id="totals-header" role="button" tabindex="0" aria-expanded="false" aria-controls="totals-grid">
+          <span class="group-chevron totals-chevron" aria-hidden="true">▾</span>
+          <h2 class="totals-card-title">Totals</h2>
+        </div>
+        <div class="totals-grid" id="totals-grid">
           <div class="totals-block">
             <span class="totals-block-title">Habitable rooms</span>
             <dl class="totals-list">
@@ -477,6 +480,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
-    <script src="app.js?v=6"></script>
+    <script src="app.js?v=7"></script>
   </body>
 </html>

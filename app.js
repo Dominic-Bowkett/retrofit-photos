@@ -419,6 +419,8 @@
     saveStatus: document.getElementById("save-status"),
     metaCard: document.getElementById("meta-card"),
     metaHeader: document.getElementById("meta-header"),
+    totalsCard: document.getElementById("totals-card"),
+    totalsHeader: document.getElementById("totals-header"),
     metaName: document.getElementById("meta-name"),
     metaAssessor: document.getElementById("meta-assessor"),
     metaAddress: document.getElementById("meta-address"),
@@ -5016,6 +5018,24 @@ ${nojsFallback}
         }
       });
     }
+
+    if (els.totalsCard && els.totalsHeader) {
+      // Default-collapsed; mirrors the rest of the accordions.
+      els.totalsCard.classList.add("collapsed");
+      els.totalsHeader.setAttribute("aria-expanded", "false");
+      const toggleTotals = () => {
+        const open = els.totalsCard.classList.toggle("collapsed");
+        els.totalsHeader.setAttribute("aria-expanded", String(!open));
+      };
+      els.totalsHeader.addEventListener("click", toggleTotals);
+      els.totalsHeader.addEventListener("keydown", (e) => {
+        if (e.target !== els.totalsHeader) return;
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          toggleTotals();
+        }
+      });
+    }
   }
 
   els.gpsBtn.addEventListener("click", enableGps);
@@ -5363,7 +5383,9 @@ ${nojsFallback}
       opt.textContent = t;
       els.newRoomType.appendChild(opt);
     }
-    els.newRoomType.value = DEFAULT_ROOM_TYPE;
+    // Default to Bedroom — most properties have several, so it's the
+    // option the assessor is most likely to repeat.
+    els.newRoomType.value = ROOM_TYPES.includes("Bedroom") ? "Bedroom" : DEFAULT_ROOM_TYPE;
   }
   if (els.addRoomBtn) {
     els.addRoomBtn.addEventListener("click", () => {
@@ -5481,7 +5503,7 @@ ${nojsFallback}
 
     const anyExpanded = () =>
       !!document.querySelector(
-        ".card.meta:not(.collapsed), .card.group:not(.collapsed), .card.room:not(.collapsed)"
+        ".card.meta:not(.collapsed), .card.totals-card:not(.collapsed), .card.group:not(.collapsed), .card.room:not(.collapsed)"
       );
 
     const scrolledPast = () => {
@@ -5522,6 +5544,12 @@ ${nojsFallback}
       const metaCard = document.getElementById("meta-card");
       if (metaCard && !metaCard.classList.contains("collapsed")) {
         const header = metaCard.querySelector(".meta-header");
+        if (header) header.click();
+      }
+      // Totals card.
+      const totalsCard = document.getElementById("totals-card");
+      if (totalsCard && !totalsCard.classList.contains("collapsed")) {
+        const header = totalsCard.querySelector(".totals-header");
         if (header) header.click();
       }
       // Flat groups — click each open group's header.
