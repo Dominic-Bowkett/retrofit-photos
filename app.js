@@ -4207,6 +4207,7 @@
 
   // -------------------- Window schedule (shared by PDF + ZIP) --------------------
   const WINDOW_SCHEDULE_COLUMNS = [
+    { key: "no", label: "No." },
     { key: "room", label: "Room" },
     { key: "habitability", label: "Habitability" },
     { key: "windowLabel", label: "Window" },
@@ -4222,12 +4223,15 @@
   function buildWindowScheduleRows() {
     const rooms = (state.property && state.property.rooms) || [];
     const rows = [];
+    let runningNo = 0;
     for (const room of rooms) {
       const wins = Array.isArray(room.windows) ? room.windows : [];
       if (!wins.length) {
         // Surface rooms with no recorded windows so the schedule still
-        // shows them. Empty cells render as "—".
+        // shows them. Empty cells render as "—". The running counter
+        // doesn't advance here — placeholder rows aren't real windows.
         rows.push({
+          no: "",
           room: room.name || room.roomType || "Room",
           habitability: room.habitability || "",
           windowLabel: "—",
@@ -4237,7 +4241,9 @@
         continue;
       }
       wins.forEach((w, idx) => {
+        runningNo += 1;
         rows.push({
+          no: String(runningNo),
           room: room.name || room.roomType || "Room",
           habitability: room.habitability || "",
           // Always number windows by their position in the array, which
@@ -4712,9 +4718,9 @@ td:empty::before,td.empty{color:#94a3b8;content:"—"}
       const tableLeft = margin;
       const tableRight = pageW - margin;
       const tableW = tableRight - tableLeft;
-      // Weights for: Room | Habitability | Window | Type | Age |
-      //              Orientation | Frame | Glazing gap | Width | Height.
-      const colWeights = [2.4, 1.6, 1.2, 1.1, 1.4, 1.6, 1.2, 1.4, 1.4, 1.4];
+      // Weights for: No. | Room | Habitability | Window | Type | Age |
+      //              Orientation | Frame | Gap | Width | Height.
+      const colWeights = [0.7, 2.2, 1.4, 1.1, 1.1, 1.4, 1.5, 1.2, 1.2, 1.4, 1.4];
       const totalWeight = colWeights.reduce((a, b) => a + b, 0);
       const colWidths = colWeights.map((w) => (w / totalWeight) * tableW);
       const colX = [tableLeft];
