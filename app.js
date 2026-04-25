@@ -2329,7 +2329,20 @@
       winStack.__rerender = renderWindows;
       addWindowBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        room.windows.push(seedFromDefaults());
+        // Prefer the last window already in this room as the seed —
+        // that's the "last window entered" the user is most likely
+        // copying. Fall back to the property-wide remembered defaults.
+        // Type / Age / Frame / Glazing gap copy across; Orientation
+        // and the actual measurements always start blank.
+        const lastInRoom = room.windows[room.windows.length - 1];
+        const source = lastInRoom || lastWindowDefaults();
+        room.windows.push(
+          makeNewWindow(
+            source
+              ? { type: source.type, age: source.age, gap: source.gap, frame: source.frame }
+              : {}
+          )
+        );
         normalizeRoomWindows(room);
         renderWindows();
         saveProperty();
