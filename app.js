@@ -1013,6 +1013,7 @@
       lights: { led: 0, cfl: 0, incandescent: 0 },
       chimneys: { open: 0, blocked: 0 },
       flues: { open: 0, closed: 0, boiler: 0, other: 0 },
+      ventilation: { trickle: 0, core: 0, iev: 0, dmev: 0, passive: 0 },
     };
   }
 
@@ -1032,6 +1033,14 @@
     { key: "closed", label: "Closed" },
     { key: "boiler", label: "Boiler" },
     { key: "other", label: "Other" },
+  ];
+
+  const VENTILATION_KINDS = [
+    { key: "trickle", label: "Trickle Vents" },
+    { key: "core", label: "Core Vents" },
+    { key: "iev", label: "IEV" },
+    { key: "dmev", label: "DMEV" },
+    { key: "passive", label: "Passive" },
   ];
 
   function normalizeRoomCounts(room, prop, kinds) {
@@ -1058,6 +1067,10 @@
 
   function normalizeRoomFlues(room) {
     return normalizeRoomCounts(room, "flues", FLUE_KINDS);
+  }
+
+  function normalizeRoomVentilation(room) {
+    return normalizeRoomCounts(room, "ventilation", VENTILATION_KINDS);
   }
 
   function migrateRooms(property, photosMap) {
@@ -1119,6 +1132,7 @@
       if (normalizeRoomLights(room)) changed = true;
       if (normalizeRoomChimneys(room)) changed = true;
       if (normalizeRoomFlues(room)) changed = true;
+      if (normalizeRoomVentilation(room)) changed = true;
       if (typeof room.heated !== "boolean") {
         room.heated = true;
         changed = true;
@@ -1795,6 +1809,7 @@
     let led = 0, cfl = 0, inc = 0;
     let chimOpen = 0, chimBlocked = 0;
     let flueOpen = 0, flueClosed = 0, flueBoiler = 0, flueOther = 0;
+    let ventTrickle = 0, ventCore = 0, ventIev = 0, ventDmev = 0, ventPassive = 0;
     for (const r of rooms) {
       if (r.habitability === "Habitable") {
         if (r.heated === false) unheated++;
@@ -1812,6 +1827,12 @@
       flueClosed += Number(f.closed) || 0;
       flueBoiler += Number(f.boiler) || 0;
       flueOther += Number(f.other) || 0;
+      const v = r.ventilation || {};
+      ventTrickle += Number(v.trickle) || 0;
+      ventCore += Number(v.core) || 0;
+      ventIev += Number(v.iev) || 0;
+      ventDmev += Number(v.dmev) || 0;
+      ventPassive += Number(v.passive) || 0;
     }
     const set = (id, n) => {
       const el = document.getElementById(id);
@@ -1828,6 +1849,11 @@
     set("totals-flues-closed", flueClosed);
     set("totals-flues-boiler", flueBoiler);
     set("totals-flues-other", flueOther);
+    set("totals-vent-trickle", ventTrickle);
+    set("totals-vent-core", ventCore);
+    set("totals-vent-iev", ventIev);
+    set("totals-vent-dmev", ventDmev);
+    set("totals-vent-passive", ventPassive);
   }
 
   function expandRoom(room) {
@@ -1956,6 +1982,7 @@
     normalizeRoomLights(room);
     normalizeRoomChimneys(room);
     normalizeRoomFlues(room);
+    normalizeRoomVentilation(room);
     // Both the Lights and Chimneys fieldsets render the same kind of
     // numeric input — wire them up uniformly via data-count="<bucket>"
     // and data-key="<key>" so the bucket grows by adding HTML alone.

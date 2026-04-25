@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="stylesheet" href="style.css?v=9" />
+    <link rel="stylesheet" href="style.css?v=10" />
   </head>
   <body>
     <header class="app-header">
@@ -117,6 +117,16 @@
               <div><dt>Closed</dt><dd id="totals-flues-closed">0</dd></div>
               <div><dt>Boiler</dt><dd id="totals-flues-boiler">0</dd></div>
               <div><dt>Other</dt><dd id="totals-flues-other">0</dd></div>
+            </dl>
+          </div>
+          <div class="totals-block">
+            <span class="totals-block-title">Ventilation</span>
+            <dl class="totals-list">
+              <div><dt>Trickle</dt><dd id="totals-vent-trickle">0</dd></div>
+              <div><dt>Core</dt><dd id="totals-vent-core">0</dd></div>
+              <div><dt>IEV</dt><dd id="totals-vent-iev">0</dd></div>
+              <div><dt>DMEV</dt><dd id="totals-vent-dmev">0</dd></div>
+              <div><dt>Passive</dt><dd id="totals-vent-passive">0</dd></div>
             </dl>
           </div>
         </div>
@@ -288,6 +298,29 @@
             <label class="room-count">
               <span class="room-count-label">Other</span>
               <input type="number" class="room-count-input" data-count="flues" data-key="other" min="0" max="999" step="1" maxlength="3" inputmode="numeric" />
+            </label>
+          </fieldset>
+          <fieldset class="room-counts" aria-label="Ventilation count">
+            <legend class="room-counts-legend">Ventilation</legend>
+            <label class="room-count">
+              <span class="room-count-label">Trickle</span>
+              <input type="number" class="room-count-input" data-count="ventilation" data-key="trickle" min="0" max="999" step="1" maxlength="3" inputmode="numeric" />
+            </label>
+            <label class="room-count">
+              <span class="room-count-label">Core</span>
+              <input type="number" class="room-count-input" data-count="ventilation" data-key="core" min="0" max="999" step="1" maxlength="3" inputmode="numeric" />
+            </label>
+            <label class="room-count">
+              <span class="room-count-label">IEV</span>
+              <input type="number" class="room-count-input" data-count="ventilation" data-key="iev" min="0" max="999" step="1" maxlength="3" inputmode="numeric" />
+            </label>
+            <label class="room-count">
+              <span class="room-count-label">DMEV</span>
+              <input type="number" class="room-count-input" data-count="ventilation" data-key="dmev" min="0" max="999" step="1" maxlength="3" inputmode="numeric" />
+            </label>
+            <label class="room-count">
+              <span class="room-count-label">Passive</span>
+              <input type="number" class="room-count-input" data-count="ventilation" data-key="passive" min="0" max="999" step="1" maxlength="3" inputmode="numeric" />
             </label>
           </fieldset>
           <div class="room-photos">
@@ -508,6 +541,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
-    <script src="app.js?v=9"></script>
+    <script src="app.js?v=10"></script>
   </body>
 </html>
