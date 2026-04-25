@@ -1400,6 +1400,66 @@ input[type="date"]:focus {
   }
 }
 
+/* ---------- Totals card ---------- */
+.totals-card-title {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.totals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.totals-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--accent-softer);
+}
+
+.totals-block-title {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+}
+
+.totals-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.totals-list > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.totals-list dt {
+  font-size: 0.85rem;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.totals-list dd {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- Rooms ---------- */
 .rooms-card-header {
   margin-bottom: 12px;
@@ -1530,9 +1590,44 @@ input[type="date"]:focus {
   background: #f8fafc;
 }
 
-.room-count {
+.room-photo-count {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.room-heated-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.room-heated-chip[data-state="unheated"] {
+  background: var(--line-soft);
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+.room-heated-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.18);
+}
+
+.room-heated-chip[data-state="unheated"] .room-heated-dot {
+  background: #cbd5e1;
+  box-shadow: none;
 }
 
 .room-controls {

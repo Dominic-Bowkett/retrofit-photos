@@ -1005,6 +1005,7 @@
       name: type,
       roomType: type,
       habitability: DEFAULT_HABITABILITY_BY_TYPE[type] || "Habitable",
+      heated: true,
       photoIds: [],
       lights: { led: 0, cfl: 0, incandescent: 0 },
       chimneys: { open: 0, blocked: 0 },
@@ -1102,6 +1103,10 @@
       }
       if (normalizeRoomLights(room)) changed = true;
       if (normalizeRoomChimneys(room)) changed = true;
+      if (typeof room.heated !== "boolean") {
+        room.heated = true;
+        changed = true;
+      }
       // Catch photos that got the old "Room Photos" tag before this migration.
       if (photosMap) {
         for (const pid of room.photoIds) {
@@ -1758,9 +1763,45 @@
       empty.className = "rooms-empty";
       empty.textContent = "No rooms yet — pick a room type and tap Add room to get started.";
       els.rooms.appendChild(empty);
+      renderTotals();
       return;
     }
     for (const room of rooms) renderRoom(room);
+    renderTotals();
+  }
+
+  // Recompute the Totals card from state.property.rooms. Cheap so we
+  // call it any time a relevant input changes; the lookup is a single
+  // pass and the DOM writes are six numbers.
+  function renderTotals() {
+    const rooms = (state.property && state.property.rooms) || [];
+    let heated = 0, unheated = 0;
+    let led = 0, cfl = 0, inc = 0;
+    let chimOpen = 0, chimBlocked = 0;
+    for (const r of rooms) {
+      if (r.habitability === "Habitable") {
+        if (r.heated === false) unheated++;
+        else heated++;
+      }
+      const l = r.lights || {};
+      led += Number(l.led) || 0;
+      cfl += Number(l.cfl) || 0;
+      inc += Number(l.incandescent) || 0;
+      const c = r.chimneys || {};
+      chimOpen += Number(c.open) || 0;
+      chimBlocked += Number(c.blocked) || 0;
+    }
+    const set = (id, n) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = String(n);
+    };
+    set("totals-rooms-heated", heated);
+    set("totals-rooms-unheated", unheated);
+    set("totals-lights-led", led);
+    set("totals-lights-cfl", cfl);
+    set("totals-lights-incandescent", inc);
+    set("totals-chimneys-open", chimOpen);
+    set("totals-chimneys-blocked", chimBlocked);
   }
 
   function expandRoom(room) {
@@ -1866,6 +1907,24 @@
       node.classList.toggle("room-wet", room.habitability === "Wet Room");
       node.classList.toggle("room-nonhab", room.habitability === "Non Habitable");
       saveProperty();
+      renderTotals();
+    });
+
+    if (typeof room.heated !== "boolean") room.heated = true;
+    const heatedChip = node.querySelector(".room-heated-chip");
+    const heatedText = heatedChip.querySelector(".room-heated-text");
+    const applyHeated = () => {
+      heatedChip.dataset.state = room.heated ? "heated" : "unheated";
+      heatedChip.setAttribute("aria-pressed", String(room.heated));
+      heatedText.textContent = room.heated ? "Heated" : "Unheated";
+    };
+    applyHeated();
+    heatedChip.addEventListener("click", (e) => {
+      e.stopPropagation();
+      room.heated = !room.heated;
+      applyHeated();
+      saveProperty();
+      renderTotals();
     });
 
     normalizeRoomLights(room);
@@ -1882,6 +1941,7 @@
         const n = Number(input.value);
         room[bucket][key] = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
         saveProperty();
+        renderTotals();
       });
       input.addEventListener("blur", () => {
         // Snap "03" to "3" and clear the field when the count is zero.
@@ -1974,7 +2034,7 @@
 
   function updateRoomCount(room) {
     const node = document.querySelector(
-      `[data-room-id="${room.id}"] .room-count`
+      `[data-room-id="${room.id}"] .room-photo-count`
     );
     if (!node) return;
     const n = (room.photoIds || []).length;

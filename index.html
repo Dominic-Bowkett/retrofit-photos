@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="stylesheet" href="style.css?v=5" />
+    <link rel="stylesheet" href="style.css?v=6" />
   </head>
   <body>
     <header class="app-header">
@@ -79,6 +79,34 @@
             <span>Date of assessment</span>
             <input id="meta-date" type="date" />
           </label>
+        </div>
+      </section>
+
+      <section class="card totals-card" id="totals-card" aria-label="Property totals">
+        <h2 class="totals-card-title">Totals</h2>
+        <div class="totals-grid">
+          <div class="totals-block">
+            <span class="totals-block-title">Habitable rooms</span>
+            <dl class="totals-list">
+              <div><dt>Heated</dt><dd id="totals-rooms-heated">0</dd></div>
+              <div><dt>Unheated</dt><dd id="totals-rooms-unheated">0</dd></div>
+            </dl>
+          </div>
+          <div class="totals-block">
+            <span class="totals-block-title">Lights</span>
+            <dl class="totals-list">
+              <div><dt>LED</dt><dd id="totals-lights-led">0</dd></div>
+              <div><dt>CFL</dt><dd id="totals-lights-cfl">0</dd></div>
+              <div><dt>Incandescent</dt><dd id="totals-lights-incandescent">0</dd></div>
+            </dl>
+          </div>
+          <div class="totals-block">
+            <span class="totals-block-title">Chimneys</span>
+            <dl class="totals-list">
+              <div><dt>Open</dt><dd id="totals-chimneys-open">0</dd></div>
+              <div><dt>Blocked</dt><dd id="totals-chimneys-blocked">0</dd></div>
+            </dl>
+          </div>
         </div>
       </section>
 
@@ -181,7 +209,7 @@
           <div class="room-title-wrap">
             <span class="group-chevron" aria-hidden="true">▾</span>
             <input type="text" class="room-title-input" aria-label="Room name" placeholder="Room name" spellcheck="false" />
-            <span class="room-count">0 photos</span>
+            <span class="room-photo-count">0 photos</span>
           </div>
           <div class="room-controls">
             <label class="room-control">
@@ -192,6 +220,10 @@
               <span class="sr-only">Habitability</span>
               <select class="room-habitability" aria-label="Habitability"></select>
             </label>
+            <button class="room-heated-chip" type="button" aria-pressed="true" data-state="heated">
+              <span class="room-heated-dot" aria-hidden="true"></span>
+              <span class="room-heated-text">Heated</span>
+            </button>
             <button class="btn btn-primary-soft btn-take-photo" type="button">Take photo</button>
             <label class="btn btn-upload">
               <input type="file" class="file-input-upload" accept="image/*" multiple hidden />
@@ -445,6 +477,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
-    <script src="app.js?v=5"></script>
+    <script src="app.js?v=6"></script>
   </body>
 </html>
