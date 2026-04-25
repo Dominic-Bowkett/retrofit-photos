@@ -181,6 +181,31 @@
       required: ["measurements", "notes"],
       additionalProperties: false,
     },
+    auto_tag: {
+      type: "object",
+      properties: {
+        tag: {
+          type: ["string", "null"],
+          enum: [
+            "Room",
+            "Undercuts",
+            "Windows",
+            "Lighting",
+            "Heating",
+            "Secondary Heating",
+            "Ventilation",
+            "Renewables",
+            "Meters",
+            "Other",
+            null,
+          ],
+        },
+        reason: { type: "string" },
+        confidence: { type: "string", enum: ["high", "medium", "low"] },
+      },
+      required: ["tag", "reason", "confidence"],
+      additionalProperties: false,
+    },
   };
 
   const ANALYSIS_PRESETS = [
@@ -247,6 +272,32 @@
       userPrompt:
         "Analyse this boiler photo. Identify the model, then add a manual URL if you're confident it exists. Return JSON matching the schema.",
       schema: ANALYSIS_SCHEMAS.boiler,
+    },
+    {
+      id: "auto_tag",
+      label: "Auto-tag photo",
+      shortLabel: "Auto-tag",
+      systemPrompt:
+        "You are a Domestic Energy Assessor's assistant tagging photos in a UK retrofit survey.\n\n" +
+        "Pick the SINGLE best tag for the photo from this fixed list:\n" +
+        "- Room — general view of a room or its empty walls.\n" +
+        "- Undercuts — gaps below an internal door (door + floor visible).\n" +
+        "- Windows — close-up of a window: frame, glass, sash, sill, or a clear shot of one whole window.\n" +
+        "- Lighting — light fittings, bulbs, lamps, light switches.\n" +
+        "- Heating — radiators, central heating boilers, hot water cylinders, thermostats, heating programmers / timers, " +
+        "underfloor heating manifolds.\n" +
+        "- Secondary Heating — fireplaces, wood-burning stoves, plug-in electric heaters used as supplementary heat.\n" +
+        "- Ventilation — extractor fans, MVHR / MEV units, air bricks, dedicated trickle / core / IEV / DMEV vents " +
+        "(close-up of the vent itself, not just a window).\n" +
+        "- Renewables — solar PV / thermal panels, battery storage, heat-pump indoor or outdoor units, EV chargers.\n" +
+        "- Meters — electricity meter, gas meter, smart meter In-Home Display.\n" +
+        "- Other — anything else (general construction, walls, ceilings, junction boxes, exterior shots that don't fit).\n\n" +
+        "Return tag = null if you genuinely cannot tell. Don't guess wildly — if you're not at least medium-confident, " +
+        "prefer null. confidence: high only when the subject is unambiguous and dominates the frame. " +
+        "Keep reason to one short sentence describing what you see.",
+      userPrompt:
+        "Tag this photo with the single most appropriate retrofit-survey tag, or null if unclear.",
+      schema: ANALYSIS_SCHEMAS.auto_tag,
     },
     {
       id: "laser_measurement",
@@ -426,6 +477,7 @@
     settingsTestBtn: document.getElementById("settings-test"),
     settingsSaveBtn: document.getElementById("settings-save"),
     settingsCancelBtn: document.getElementById("settings-cancel"),
+    settingsAutoTag: document.getElementById("settings-auto-tag"),
     lightboxAnalysePreset: document.getElementById("lightbox-analyse-preset"),
     lightboxAnalyseRun: document.getElementById("lightbox-analyse-run"),
     lightboxAnalyses: document.getElementById("lightbox-analyses"),
@@ -1331,19 +1383,30 @@
     return false;
   }
 
-  // Backfill the laserCapture flag on photos that pre-date it so the
-  // export filters are deterministic without relying on the analysis
-  // sniff each time. Returns true if anything changed.
-  function migrateLaserCaptureFlag() {
-    let dirty = false;
+  // Older builds saved laser captures as room photos with a
+  // laserCapture flag and excluded them from exports. The current
+  // build doesn't persist them at all, so on load we delete any that
+  // are still lying around — including from rooms' photoIds and from
+  // IndexedDB.
+  function cleanupLegacyLaserCaptures() {
+    if (!state.property) return;
+    const ids = [];
     for (const photo of state.photos.values()) {
-      if (!photo.laserCapture && isLaserCapturePhoto(photo)) {
-        photo.laserCapture = true;
-        dirty = true;
-        savePhotoNow(photo).catch((err) => console.error(err));
-      }
+      if (isLaserCapturePhoto(photo)) ids.push(photo.id);
     }
-    return dirty;
+    if (!ids.length) return;
+    const idSet = new Set(ids);
+    for (const g of state.property.groups || []) {
+      g.photoIds = (g.photoIds || []).filter((pid) => !idSet.has(pid));
+    }
+    for (const room of state.property.rooms || []) {
+      room.photoIds = (room.photoIds || []).filter((pid) => !idSet.has(pid));
+    }
+    for (const id of ids) {
+      state.photos.delete(id);
+      IDB.deletePhoto(id).catch((err) => console.warn("Failed to delete legacy laser photo", err));
+    }
+    saveProperty();
   }
 
   function totalPhotoCount() {
@@ -1432,9 +1495,8 @@
       saveProperty();
     }
 
-    // Backfill the laserCapture flag on any pre-flag laser photos so
-    // export filters work without relying on the analysis sniff.
-    migrateLaserCaptureFlag();
+    // Drop any laser-capture photos that older builds left in the room.
+    cleanupLegacyLaserCaptures();
 
     initExpandedForProperty();
     renderMeta();
@@ -2713,6 +2775,7 @@
     if (isRoomPhoto) expandRoom(owner.room);
 
     let missingExifCount = 0;
+    const newPhotos = [];
     for (const file of imageFiles) {
       try {
         const photo = await processUploadedFile(file);
@@ -2720,6 +2783,7 @@
         photo.label = `${group.name} — ${group.photoIds.length + 1}`;
         state.photos.set(photo.id, photo);
         group.photoIds.push(photo.id);
+        newPhotos.push(photo);
         if (!photo.takenAt || !photo.gps) missingExifCount += 1;
         await savePhotoNow(photo);
         renderThumb(group, photo, { isRoomPhoto });
@@ -2739,6 +2803,7 @@
     } else {
       toast(`Uploaded ${imageFiles.length} photo${imageFiles.length === 1 ? "" : "s"}.`);
     }
+    queueAutoTag(newPhotos);
   }
 
   function addGroup(name) {
@@ -3449,12 +3514,32 @@
     camera.els.overlay.hidden = true;
     camera.els.overlay.setAttribute("aria-hidden", "true");
 
+    const laserCapture = camera.pendingLaserCapture;
+    camera.pendingLaserCapture = null;
+
     if (save && camera.buffer.length && camera.group) {
-      commitBufferedPhotos(camera.group, camera.buffer);
-    } else {
-      // Cancel-without-save → drop any pending laser-capture so the next
-      // ordinary photo doesn't accidentally trigger the picker.
-      camera.pendingLaserCapture = null;
+      if (laserCapture) {
+        // Laser-screen path: don't save the photo to the room. Run the
+        // analysis on the captured frame's dataUrl in the background
+        // and discard the photo afterwards — it isn't evidence, just
+        // a measurement input.
+        const targetRoom = camera.group;
+        const captured = camera.buffer[camera.buffer.length - 1];
+        const targetWin =
+          (targetRoom.windows || []).find((w) => w.id === laserCapture.windowId) ||
+          (targetRoom.windows || [])[0] ||
+          null;
+        if (targetWin) {
+          runLaserAutoFill(targetRoom, targetWin, captured).catch((err) => {
+            console.error("laser auto-fill failed", err);
+            toast(err && err.message ? err.message : "Couldn't read the laser screen.", "err");
+          });
+        } else {
+          toast("Add a window to this room before capturing from the laser.", "err");
+        }
+      } else {
+        commitBufferedPhotos(camera.group, camera.buffer);
+      }
     }
     camera.buffer = [];
     camera.group = null;
@@ -3537,19 +3622,6 @@
     const owner = findGroupById(group.id);
     const isRoomPhoto = !!(owner && owner.room);
     if (isRoomPhoto) expandRoom(owner.room);
-    // Pre-stamp laser-capture photos with the right tag so they file
-    // alongside the room's other window evidence when filtered by tag.
-    const laserCapture = camera.pendingLaserCapture;
-    camera.pendingLaserCapture = null;
-    if (laserCapture && photos.length) {
-      for (const p of photos) {
-        if (!p.roomTag) p.roomTag = "Windows";
-        // Stamp so the export pipelines can leave these out — the laser
-        // screen photo is a data source, not evidence the assessor wants
-        // surfaced in the report.
-        p.laserCapture = true;
-      }
-    }
     for (const photo of photos) {
       photo.propertyId = state.property.id;
       photo.label = `${group.name} — ${group.photoIds.length + 1}`;
@@ -3567,24 +3639,8 @@
     updateExportButton();
     saveProperty();
     toast(`Added ${photos.length} photo${photos.length === 1 ? "" : "s"} to ${group.name}.`);
-
-    if (laserCapture && photos.length && isRoomPhoto && owner.room.id === laserCapture.roomId) {
-      // Run the laser-screen analysis silently in the background — the
-      // user keeps interacting with the app, the result lands as a
-      // toast when it's done.
-      const targetWin =
-        (owner.room.windows || []).find((w) => w.id === laserCapture.windowId) ||
-        (owner.room.windows || [])[0] ||
-        null;
-      if (targetWin) {
-        runLaserAutoFill(owner.room, targetWin, photos[photos.length - 1]).catch((err) => {
-          console.error("laser auto-fill failed", err);
-          toast(err && err.message ? err.message : "Couldn't read the laser screen.", "err");
-        });
-      } else {
-        toast("Add a window to this room before capturing from the laser.", "err");
-      }
-    }
+    // Fire-and-forget AI auto-tagging for the new photos.
+    queueAutoTag(photos);
   }
 
   camera.els.shutter.addEventListener("click", captureFrame);
@@ -3922,15 +3978,9 @@
       return;
     }
 
-    // Persist the analysis on the photo so it's visible in the Analysis
-    // view and the lightbox like any other AI run.
-    if (!Array.isArray(photo.analyses)) photo.analyses = [];
-    photo.analyses.push(analysis);
-    try {
-      await savePhotoNow(photo);
-    } catch (err) {
-      console.error(err);
-    }
+    // The laser-screen photo is transient — we never save it to the
+    // room or to IndexedDB, so there's nothing to persist the analysis
+    // onto. Just use the result to fill width / height below.
 
     const measurements = (analysis.data && Array.isArray(analysis.data.measurements))
       ? analysis.data.measurements.filter((m) => Number.isFinite(Number(m && m.value)))
@@ -3990,6 +4040,94 @@
         ? `Width set to ${largest.display}.`
         : `Width ${largest.display} · Height ${smallest.display}.`
     );
+  }
+
+  // -------------------- Auto-tag (Claude) --------------------
+  // After every camera capture or upload we ask Claude to pick the
+  // best room-tag for the photo (Heating / Windows / Meters / …) so
+  // the assessor doesn't have to drop the dropdown on each thumb. The
+  // runs are queued one at a time so a 30-photo upload doesn't slam
+  // the API in parallel.
+  const autoTagState = {
+    queue: [],
+    running: false,
+  };
+
+  function isAutoTagEnabled() {
+    if (!getClaudeApiKey()) return false;
+    try {
+      const v = localStorage.getItem("retrofit-photos:auto-tag");
+      return v === null ? true : v === "1";
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function setAutoTagEnabled(on) {
+    try {
+      localStorage.setItem("retrofit-photos:auto-tag", on ? "1" : "0");
+    } catch (_) { /* ignore */ }
+  }
+
+  async function runPhotoAutoTag(photo) {
+    const result = await runPhotoAnalysis(photo, "auto_tag");
+    return result && result.data ? result.data : null;
+  }
+
+  function queueAutoTag(photos) {
+    if (!isAutoTagEnabled()) return;
+    if (!Array.isArray(photos) || !photos.length) return;
+    for (const p of photos) {
+      if (!p || isLaserCapturePhoto(p)) continue;
+      // Don't overwrite a tag the user has already set manually.
+      if (p.roomTag) continue;
+      autoTagState.queue.push(p.id);
+    }
+    pumpAutoTagQueue();
+  }
+
+  async function pumpAutoTagQueue() {
+    if (autoTagState.running) return;
+    autoTagState.running = true;
+    try {
+      while (autoTagState.queue.length) {
+        const id = autoTagState.queue.shift();
+        const photo = state.photos.get(id);
+        if (!photo || photo.roomTag || isLaserCapturePhoto(photo)) continue;
+        try {
+          const data = await runPhotoAutoTag(photo);
+          const tag = data && data.tag;
+          if (!tag || !ROOM_TAGS.includes(tag)) continue;
+          // The user may have set the tag manually while we were
+          // analysing — don't clobber that.
+          const fresh = state.photos.get(id);
+          if (!fresh || fresh.roomTag) continue;
+          fresh.roomTag = tag;
+          try {
+            await savePhotoNow(fresh);
+          } catch (err) {
+            console.warn("Failed to persist auto-tag", err);
+          }
+          // Refresh any visible thumb dropdowns so the new tag shows.
+          syncThumbRoomTagDropdowns(id, tag);
+          saveProperty();
+        } catch (err) {
+          // Auto-tagging is best-effort — log and move on so a single
+          // failure doesn't stall the queue.
+          console.warn("auto-tag failed for", id, err);
+        }
+      }
+    } finally {
+      autoTagState.running = false;
+    }
+  }
+
+  function syncThumbRoomTagDropdowns(photoId, tag) {
+    document
+      .querySelectorAll(`[data-photo-id="${photoId}"] .thumb-roomtag`)
+      .forEach((sel) => {
+        sel.value = tag;
+      });
   }
 
   // Generate a short label for a photo via Claude. The owning section
@@ -5980,6 +6118,7 @@ ${nojsFallback}
       }
       els.settingsModel.value = getClaudeModel();
     }
+    if (els.settingsAutoTag) els.settingsAutoTag.checked = isAutoTagEnabled();
     els.settingsDialog.hidden = false;
     els.settingsDialog.setAttribute("aria-hidden", "false");
   }
@@ -6055,6 +6194,7 @@ ${nojsFallback}
       const model = els.settingsModel ? els.settingsModel.value : DEFAULT_CLAUDE_MODEL;
       setClaudeApiKey(key);
       setClaudeModel(model);
+      if (els.settingsAutoTag) setAutoTagEnabled(!!els.settingsAutoTag.checked);
       closeSettingsDialog();
       toast(key ? "Settings saved." : "API key cleared.");
       // Refresh the lightbox analyse button so the disabled state updates

@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="stylesheet" href="style.css?v=18" />
+    <link rel="stylesheet" href="style.css?v=19" />
   </head>
   <body>
     <header class="app-header">
@@ -491,6 +491,10 @@
             <select id="settings-model"></select>
           </label>
         </div>
+        <label class="dialog-toggle">
+          <input type="checkbox" id="settings-auto-tag" />
+          <span>Auto-tag every new photo (radiator → Heating, meter → Meters, …)</span>
+        </label>
         <p class="dialog-help">
           <strong>Key is stored in this browser only</strong> — in
           <code>localStorage</code>, which any code running on this page (including
@@ -593,6 +597,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
-    <script src="app.js?v=18"></script>
+    <script src="app.js?v=19"></script>
   </body>
 </html>
