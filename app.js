@@ -1315,14 +1315,43 @@
     return out;
   }
 
+  // Laser-screen captures are a data source for window measurements,
+  // not evidence — they get filtered out of every PDF / ZIP / HTML
+  // export and the total photo count. The explicit boolean flag is
+  // stamped at capture time, but we also detect older photos (taken
+  // before the flag existed) by their laser_measurement analysis.
+  function isLaserCapturePhoto(p) {
+    if (!p) return false;
+    if (p.laserCapture === true) return true;
+    if (Array.isArray(p.analyses)) {
+      for (const a of p.analyses) {
+        if (a && a.preset === "laser_measurement") return true;
+      }
+    }
+    return false;
+  }
+
+  // Backfill the laserCapture flag on photos that pre-date it so the
+  // export filters are deterministic without relying on the analysis
+  // sniff each time. Returns true if anything changed.
+  function migrateLaserCaptureFlag() {
+    let dirty = false;
+    for (const photo of state.photos.values()) {
+      if (!photo.laserCapture && isLaserCapturePhoto(photo)) {
+        photo.laserCapture = true;
+        dirty = true;
+        savePhotoNow(photo).catch((err) => console.error(err));
+      }
+    }
+    return dirty;
+  }
+
   function totalPhotoCount() {
-    // Laser-screen captures are data, not evidence — exclude from the
-    // total used to enable / size export buttons.
     let n = 0;
     for (const { group } of allPhotoGroups()) {
       for (const pid of group.photoIds || []) {
         const p = state.photos.get(pid);
-        if (p && !p.laserCapture) n++;
+        if (p && !isLaserCapturePhoto(p)) n++;
       }
     }
     return n;
@@ -1402,6 +1431,10 @@
       }
       saveProperty();
     }
+
+    // Backfill the laserCapture flag on any pre-flag laser photos so
+    // export filters work without relying on the analysis sniff.
+    migrateLaserCaptureFlag();
 
     initExpandedForProperty();
     renderMeta();
@@ -4181,7 +4214,7 @@
     { key: "age", label: "Age" },
     { key: "orientation", label: "Orientation" },
     { key: "frame", label: "Frame" },
-    { key: "gap", label: "Glazing gap" },
+    { key: "gap", label: "Gap" },
     { key: "width", label: "Width" },
     { key: "height", label: "Height" },
   ];
@@ -4207,7 +4240,10 @@
         rows.push({
           room: room.name || room.roomType || "Room",
           habitability: room.habitability || "",
-          windowLabel: wins.length > 1 ? `Window ${idx + 1}` : "Window",
+          // Always number windows by their position in the array, which
+          // is also their addition order. Single-window rooms still
+          // read "Window 1" so the column has consistent values.
+          windowLabel: `Window ${idx + 1}`,
           type: w.type || "",
           age: w.age || "",
           orientation: w.orientation || "",
@@ -4306,7 +4342,7 @@ td:empty::before,td.empty{color:#94a3b8;content:"—"}
       const buckets = new Map();
       const UNTAGGED_KEY = "__untagged__";
       const pushEntry = (photo, source) => {
-        if (!photo || photo.laserCapture) return;
+        if (!photo || isLaserCapturePhoto(photo)) return;
         const key = ROOM_TAGS.includes(photo.roomTag) ? photo.roomTag : UNTAGGED_KEY;
         if (!buckets.has(key)) buckets.set(key, []);
         buckets.get(key).push({ photo, source });
@@ -4347,7 +4383,7 @@ td:empty::before,td.empty{color:#94a3b8;content:"—"}
       const visibleIds = (ids) =>
         (ids || []).filter((pid) => {
           const p = state.photos.get(pid);
-          return p && !p.laserCapture;
+          return p && !isLaserCapturePhoto(p);
         });
       groupsWithPhotos = state.property.groups
         .map((g) => ({ ...g, photoIds: visibleIds(g.photoIds) }))
@@ -5179,7 +5215,7 @@ td:empty::before,td.empty{color:#94a3b8;content:"—"}
       const entries = (g.photoIds || [])
         .map((pid) => {
           const p = state.photos.get(pid);
-          if (!p || p.laserCapture) return null;
+          if (!p || isLaserCapturePhoto(p)) return null;
           return addPhoto(p, g.name);
         })
         .filter(Boolean);
@@ -5189,7 +5225,7 @@ td:empty::before,td.empty{color:#94a3b8;content:"—"}
       const entries = (room.photoIds || [])
         .map((pid) => {
           const p = state.photos.get(pid);
-          if (!p || p.laserCapture) return null;
+          if (!p || isLaserCapturePhoto(p)) return null;
           return addPhoto(p, `${room.name} (${room.habitability})`);
         })
         .filter(Boolean);
@@ -5713,7 +5749,7 @@ ${nojsFallback}
       let idx = 0;
       for (const pid of g.photoIds || []) {
         const photo = state.photos.get(pid);
-        if (!photo || photo.laserCapture) continue;
+        if (!photo || isLaserCapturePhoto(photo)) continue;
         idx += 1;
         walkItems.push({ group: g, room: null, photo, indexInGroup: idx });
       }
@@ -5722,7 +5758,7 @@ ${nojsFallback}
       let idx = 0;
       for (const pid of room.photoIds || []) {
         const photo = state.photos.get(pid);
-        if (!photo || photo.laserCapture) continue;
+        if (!photo || isLaserCapturePhoto(photo)) continue;
         idx += 1;
         walkItems.push({ group: room, room, photo, indexInGroup: idx });
       }
