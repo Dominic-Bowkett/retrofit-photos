@@ -1271,8 +1271,15 @@
   }
 
   function totalPhotoCount() {
+    // Laser-screen captures are data, not evidence — exclude from the
+    // total used to enable / size export buttons.
     let n = 0;
-    for (const { group } of allPhotoGroups()) n += group.photoIds.length;
+    for (const { group } of allPhotoGroups()) {
+      for (const pid of group.photoIds || []) {
+        const p = state.photos.get(pid);
+        if (p && !p.laserCapture) n++;
+      }
+    }
     return n;
   }
 
@@ -3369,6 +3376,10 @@
     if (laserCapture && photos.length) {
       for (const p of photos) {
         if (!p.roomTag) p.roomTag = "Windows";
+        // Stamp so the export pipelines can leave these out — the laser
+        // screen photo is a data source, not evidence the assessor wants
+        // surfaced in the report.
+        p.laserCapture = true;
       }
     }
     for (const photo of photos) {
@@ -3726,44 +3737,12 @@
   }
 
   async function runLaserPicker(room, photo) {
-    const dlg = document.getElementById("laser-picker-dialog");
-    const status = document.getElementById("laser-picker-status");
-    const list = document.getElementById("laser-picker-list");
-    const target = document.getElementById("laser-picker-target");
-    const widthSlot = document.getElementById("laser-picker-width");
-    const heightSlot = document.getElementById("laser-picker-height");
-    const saveBtn = document.getElementById("laser-picker-save");
-    const cancelBtn = document.getElementById("laser-picker-cancel");
-    const backdrop = document.getElementById("laser-picker-backdrop");
-    if (!dlg || !list || !widthSlot || !heightSlot || !saveBtn || !cancelBtn || !status || !target) return;
-
-    const open = () => {
-      dlg.hidden = false;
-      dlg.setAttribute("aria-hidden", "false");
-    };
-    const close = () => {
-      dlg.hidden = true;
-      dlg.setAttribute("aria-hidden", "true");
-    };
-
-    // Reset UI.
-    list.innerHTML = "";
-    target.hidden = true;
-    widthSlot.textContent = "—";
-    heightSlot.textContent = "—";
-    saveBtn.disabled = true;
-    status.textContent = "Reading the laser screen…";
-    open();
-
     let analysis;
     try {
+      toast("Reading the laser screen…");
       analysis = await runPhotoAnalysis(photo, "laser_measurement");
     } catch (err) {
-      status.textContent = err && err.message ? err.message : "Couldn't read the laser screen.";
-      saveBtn.disabled = true;
-      // Leave dialog open so the user sees the error and can cancel.
-      cancelBtn.onclick = close;
-      backdrop.onclick = close;
+      toast(err && err.message ? err.message : "Couldn't read the laser screen.", "err");
       return;
     }
 
@@ -3778,88 +3757,56 @@
     }
 
     const measurements = (analysis.data && Array.isArray(analysis.data.measurements))
-      ? analysis.data.measurements
+      ? analysis.data.measurements.filter((m) => Number.isFinite(Number(m && m.value)))
       : [];
     if (!measurements.length) {
-      status.textContent = "No readings detected on the screen. Try a closer, glare-free shot.";
-      cancelBtn.onclick = close;
-      backdrop.onclick = close;
+      toast("No usable readings on the laser screen — try a closer, glare-free shot.", "err");
       return;
     }
-    status.textContent = "Tap a reading then assign it to Width or Height.";
 
-    const picked = { width: null, height: null };
-    let activeIdx = -1;
+    // Convert each reading to metres so we can compare like-for-like
+    // even if the laser is mixing m / cm / mm.
+    const TO_METRES = { m: 1, cm: 0.01, mm: 0.001 };
+    const valued = measurements
+      .map((m) => {
+        const unit = (m.unit || "").toLowerCase();
+        const factor = Object.prototype.hasOwnProperty.call(TO_METRES, unit) ? TO_METRES[unit] : 1;
+        return { display: m.display, valueM: Number(m.value) * factor };
+      })
+      .filter((m) => Number.isFinite(m.valueM));
+    if (!valued.length) {
+      toast("Could not parse any laser readings as numbers.", "err");
+      return;
+    }
 
-    const refreshSlots = () => {
-      target.hidden = false;
-      widthSlot.textContent = picked.width ? picked.width.display : "—";
-      heightSlot.textContent = picked.height ? picked.height.display : "—";
-      saveBtn.disabled = !(picked.width || picked.height);
-    };
+    // Smallest reading → Width, largest → Height. If only one reading
+    // is available, set it as Width and leave Height untouched.
+    let smallest = valued[0];
+    let largest = valued[0];
+    for (const v of valued) {
+      if (v.valueM < smallest.valueM) smallest = v;
+      if (v.valueM > largest.valueM) largest = v;
+    }
 
-    const renderList = () => {
-      list.innerHTML = "";
-      measurements.forEach((m, i) => {
-        const item = document.createElement("li");
-        item.className = "laser-picker-item";
-        if (i === activeIdx) item.classList.add("is-active");
-        const display = m.display || "?";
-        const role = m.role_hint ? ` · ${m.role_hint}` : "";
-        const conf = m.confidence ? `<span class="analysis-chip analysis-chip-${m.confidence}">${m.confidence}</span>` : "";
-        item.innerHTML = `
-          <button type="button" class="laser-picker-pick">
-            <span class="laser-picker-display">${escapeHtml(display)}</span>
-            <span class="laser-picker-meta">${escapeHtml(role)}</span>
-            ${conf}
-          </button>
-          <div class="laser-picker-assigns">
-            <button type="button" class="laser-picker-assign" data-slot="width">Width</button>
-            <button type="button" class="laser-picker-assign" data-slot="height">Height</button>
-          </div>
-        `;
-        const pickBtn = item.querySelector(".laser-picker-pick");
-        pickBtn.addEventListener("click", () => {
-          activeIdx = i;
-          renderList();
-        });
-        item.querySelectorAll(".laser-picker-assign").forEach((btn) => {
-          btn.addEventListener("click", () => {
-            const slot = btn.dataset.slot;
-            if (slot !== "width" && slot !== "height") return;
-            // Each measurement can only own one slot; clear the other if reassigning.
-            for (const k of ["width", "height"]) {
-              if (picked[k] && picked[k].__idx === i && k !== slot) picked[k] = null;
-            }
-            picked[slot] = { display, value: m.value, unit: m.unit, __idx: i };
-            refreshSlots();
-          });
-        });
-        list.appendChild(item);
-      });
-    };
+    room.windows.width = smallest.display;
+    if (largest !== smallest) room.windows.height = largest.display;
+    normalizeRoomWindows(room);
+    rememberWindowDefaults(room.windows);
+    saveProperty();
 
-    renderList();
-
-    saveBtn.onclick = () => {
-      if (picked.width) room.windows.width = picked.width.display;
-      if (picked.height) room.windows.height = picked.height.display;
-      normalizeRoomWindows(room);
-      rememberWindowDefaults(room.windows);
-      saveProperty();
-      // Refresh the visible inputs in the room card.
-      const node = document.querySelector(`[data-room-id="${room.id}"]`);
-      if (node) {
-        const w = node.querySelector(".room-windows-width");
-        const h = node.querySelector(".room-windows-height");
-        if (w) w.value = room.windows.width;
-        if (h) h.value = room.windows.height;
-      }
-      close();
-      toast("Window measurements saved.");
-    };
-    cancelBtn.onclick = close;
-    backdrop.onclick = close;
+    // Refresh the visible inputs in the room card.
+    const node = document.querySelector(`[data-room-id="${room.id}"]`);
+    if (node) {
+      const w = node.querySelector(".room-windows-width");
+      const h = node.querySelector(".room-windows-height");
+      if (w) w.value = room.windows.width;
+      if (h) h.value = room.windows.height;
+    }
+    toast(
+      largest === smallest
+        ? `Width set to ${smallest.display}.`
+        : `Width ${smallest.display} · Height ${largest.display}.`
+    );
   }
 
   // Generate a short label for a photo via Claude. The owning section
@@ -4075,6 +4022,91 @@
     return parts.join("_");
   }
 
+  // -------------------- Window schedule (shared by PDF + ZIP) --------------------
+  const WINDOW_SCHEDULE_COLUMNS = [
+    { key: "room", label: "Room" },
+    { key: "habitability", label: "Habitability" },
+    { key: "type", label: "Type" },
+    { key: "age", label: "Age" },
+    { key: "frame", label: "Frame" },
+    { key: "gap", label: "Glazing gap" },
+    { key: "width", label: "Width" },
+    { key: "height", label: "Height" },
+  ];
+
+  function buildWindowScheduleRows() {
+    const rooms = (state.property && state.property.rooms) || [];
+    return rooms.map((room) => {
+      const w = room.windows || {};
+      return {
+        room: room.name || room.roomType || "Room",
+        habitability: room.habitability || "",
+        type: w.type || "",
+        age: w.age || "",
+        frame: w.frame || "",
+        gap: w.gap || "",
+        width: w.width || "",
+        height: w.height || "",
+      };
+    });
+  }
+
+  function buildWindowMeasurementsHtml() {
+    const meta = (state.property && state.property.meta) || {};
+    const title = state.property && state.property.name
+      ? `${state.property.name} — Window measurements`
+      : "Window measurements";
+    const rows = buildWindowScheduleRows();
+    const cells = (row) =>
+      WINDOW_SCHEDULE_COLUMNS.map(
+        (c) => `<td>${escapeHtml(row[c.key] || "")}</td>`
+      ).join("");
+    const headers = WINDOW_SCHEDULE_COLUMNS.map(
+      (c) => `<th scope="col">${escapeHtml(c.label)}</th>`
+    ).join("");
+    const tbody = rows.length
+      ? rows.map((r) => `<tr>${cells(r)}</tr>`).join("")
+      : `<tr><td colspan="${WINDOW_SCHEDULE_COLUMNS.length}" class="empty">No rooms recorded.</td></tr>`;
+    return `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${escapeHtml(title)}</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:24px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:14px;line-height:1.5;color:#0f172a;background:#f7f8fa}
+.wrap{max-width:1100px;margin:0 auto}
+header{margin:0 0 18px}
+h1{margin:0 0 4px;font-size:1.4rem;color:#0f172a}
+.meta{margin:0;color:#64748b;font-size:0.88rem}
+.meta strong{color:#0f172a;font-weight:600}
+table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
+th,td{padding:9px 12px;text-align:left;font-size:0.9rem;vertical-align:top;border-bottom:1px solid #e2e8f0}
+th{background:#1e293b;color:#fff;font-weight:600;font-size:0.78rem;letter-spacing:0.3px;text-transform:uppercase;border-bottom:1px solid #1e293b}
+tbody tr:nth-child(even){background:#f8fafc}
+tbody tr:last-child td{border-bottom:none}
+td:empty::before,td.empty{color:#94a3b8;content:"—"}
+.empty{text-align:center;padding:24px;color:#94a3b8}
+@media print{body{background:#fff}.wrap{max-width:none}}
+</style>
+</head>
+<body><div class="wrap">
+<header>
+  <h1>${escapeHtml(title)}</h1>
+  <p class="meta">
+    <strong>Address:</strong> ${escapeHtml(meta.address || "—")} ·
+    <strong>Assessor:</strong> ${escapeHtml(meta.assessor || "—")} ·
+    <strong>Job ref:</strong> ${escapeHtml(meta.ref || "—")} ·
+    <strong>Date:</strong> ${escapeHtml(meta.date || "—")}
+  </p>
+</header>
+<table>
+  <thead><tr>${headers}</tr></thead>
+  <tbody>${tbody}</tbody>
+</table>
+</div></body></html>`;
+  }
+
   async function buildPdf(options = {}) {
     const photoPaths = options.photoPaths instanceof Map ? options.photoPaths : null;
     const layout = options.layout === "tag" ? "tag" : "group";
@@ -4104,7 +4136,7 @@
       const buckets = new Map();
       const UNTAGGED_KEY = "__untagged__";
       const pushEntry = (photo, source) => {
-        if (!photo) return;
+        if (!photo || photo.laserCapture) return;
         const key = ROOM_TAGS.includes(photo.roomTag) ? photo.roomTag : UNTAGGED_KEY;
         if (!buckets.has(key)) buckets.set(key, []);
         buckets.get(key).push({ photo, source });
@@ -4142,13 +4174,21 @@
         });
       }
     } else {
-      groupsWithPhotos = state.property.groups.filter((g) => g.photoIds.length > 0);
+      const visibleIds = (ids) =>
+        (ids || []).filter((pid) => {
+          const p = state.photos.get(pid);
+          return p && !p.laserCapture;
+        });
+      groupsWithPhotos = state.property.groups
+        .map((g) => ({ ...g, photoIds: visibleIds(g.photoIds) }))
+        .filter((g) => g.photoIds.length > 0);
       for (const room of state.property.rooms || []) {
-        if (!(room.photoIds || []).length) continue;
+        const ids = visibleIds(room.photoIds);
+        if (!ids.length) continue;
         groupsWithPhotos.push({
           id: `room-${room.id}`,
           name: `${room.name} (${room.habitability})`,
-          photoIds: room.photoIds.slice(),
+          photoIds: ids,
           room,
         });
       }
@@ -4444,6 +4484,119 @@
       }
     }
 
+    // -------- Window schedule (after the photo sections) --------
+    const scheduleRows = buildWindowScheduleRows();
+    let scheduleStartPage = null;
+    if (scheduleRows.length) {
+      doc.addPage();
+      scheduleStartPage = doc.internal.getNumberOfPages();
+      addOutline("Window schedule", scheduleStartPage);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(0);
+      doc.text("Window schedule", margin, margin + 6);
+      doc.setDrawColor(18, 18, 18);
+      doc.setLineWidth(1.2);
+      doc.line(margin, margin + 12, pageW - margin, margin + 12);
+      doc.setLineWidth(0.2);
+
+      // Layout: 8 columns, 1st column (Room) gets the most space.
+      const cols = WINDOW_SCHEDULE_COLUMNS;
+      const tableLeft = margin;
+      const tableRight = pageW - margin;
+      const tableW = tableRight - tableLeft;
+      const colWeights = [3, 2, 1.6, 1.8, 1.5, 1.6, 1.8, 1.8]; // sums to ~15.1
+      const totalWeight = colWeights.reduce((a, b) => a + b, 0);
+      const colWidths = colWeights.map((w) => (w / totalWeight) * tableW);
+      const colX = [tableLeft];
+      for (let i = 0; i < colWidths.length - 1; i++) colX.push(colX[i] + colWidths[i]);
+
+      const cellPadX = 4;
+      const cellPadY = 4;
+      const headerH = 22;
+      const minRowH = 20;
+
+      let yCursor = margin + 32;
+
+      const drawHeader = () => {
+        doc.setFillColor(241, 245, 249); // slate-100
+        doc.rect(tableLeft, yCursor, tableW, headerH, "F");
+        doc.setDrawColor(220);
+        doc.line(tableLeft, yCursor + headerH, tableRight, yCursor + headerH);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(15, 23, 42);
+        cols.forEach((c, i) => {
+          doc.text(c.label, colX[i] + cellPadX, yCursor + headerH - cellPadY - 2);
+        });
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(0);
+        yCursor += headerH;
+      };
+
+      drawHeader();
+
+      const rowFontSize = 9.5;
+      doc.setFontSize(rowFontSize);
+
+      const rowHeightFor = (row) => {
+        let maxLines = 1;
+        cols.forEach((c, i) => {
+          const txt = String(row[c.key] || "—");
+          const innerW = colWidths[i] - cellPadX * 2;
+          const wrapped = doc.splitTextToSize(txt, innerW);
+          if (wrapped.length > maxLines) maxLines = wrapped.length;
+        });
+        return Math.max(minRowH, cellPadY * 2 + maxLines * 12);
+      };
+
+      scheduleRows.forEach((row, idx) => {
+        const rowH = rowHeightFor(row);
+        if (yCursor + rowH > pageH - margin - 28) {
+          doc.addPage();
+          // Footer is added later for every page in a single sweep.
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(16);
+          doc.text("Window schedule (cont.)", margin, margin + 6);
+          doc.setDrawColor(18, 18, 18);
+          doc.setLineWidth(1.2);
+          doc.line(margin, margin + 12, pageW - margin, margin + 12);
+          doc.setLineWidth(0.2);
+          yCursor = margin + 32;
+          drawHeader();
+          doc.setFontSize(rowFontSize);
+        }
+        // Zebra striping for legibility.
+        if (idx % 2 === 1) {
+          doc.setFillColor(248, 250, 252); // slate-50
+          doc.rect(tableLeft, yCursor, tableW, rowH, "F");
+        }
+        cols.forEach((c, i) => {
+          const txt = String(row[c.key] || "—");
+          const innerW = colWidths[i] - cellPadX * 2;
+          const wrapped = doc.splitTextToSize(txt, innerW);
+          let ty = yCursor + cellPadY + 10;
+          for (const line of wrapped) {
+            doc.text(line, colX[i] + cellPadX, ty);
+            ty += 12;
+          }
+        });
+        // Row separator.
+        doc.setDrawColor(229, 231, 235);
+        doc.line(tableLeft, yCursor + rowH, tableRight, yCursor + rowH);
+        yCursor += rowH;
+      });
+
+      // Outer table border.
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.4);
+      doc.rect(tableLeft, margin + 32, tableW, yCursor - (margin + 32));
+      doc.setLineWidth(0.2);
+      doc.setTextColor(0);
+      doc.setDrawColor(0);
+    }
+
     // Fill in the contents page (clickable links)
     doc.setPage(contentsPageNumber);
     let cy = margin + 36;
@@ -4524,6 +4677,44 @@
       doc.setDrawColor(0);
       cy += ROW_HEIGHT;
       if (cy > pageH - margin - 40) break;
+    }
+
+    // Append the Window schedule as a final contents row if it was emitted.
+    if (scheduleStartPage) {
+      const rowLeft = margin;
+      const title = "Window schedule";
+      const countText = `${scheduleRows.length} row${scheduleRows.length === 1 ? "" : "s"}`;
+      const pageText = `p. ${scheduleStartPage}`;
+      const titleW = doc.getTextWidth(title);
+      const pageW_text = doc.getTextWidth(pageText);
+      const countW = doc.getTextWidth(countText);
+      doc.setTextColor(LINK_R, LINK_G, LINK_B);
+      doc.text(title, rowLeft, cy);
+      doc.setDrawColor(LINK_R, LINK_G, LINK_B);
+      doc.setLineWidth(0.6);
+      doc.line(rowLeft, cy + 2, rowLeft + titleW, cy + 2);
+      const pageX = colRight - pageW_text;
+      doc.text(pageText, pageX, cy);
+      doc.line(pageX, cy + 2, colRight, cy + 2);
+      doc.setTextColor(110);
+      const countRightX = pageX - 10;
+      doc.text(countText, countRightX, cy, { align: "right" });
+      const dotsStartX = rowLeft + titleW + 8;
+      const dotsEndX = countRightX - countW - 8;
+      if (dotsEndX > dotsStartX) {
+        doc.setTextColor(170);
+        doc.setFontSize(10);
+        const dotStr = " .".repeat(Math.max(1, Math.floor((dotsEndX - dotsStartX) / 3)));
+        doc.text(dotStr, dotsStartX, cy);
+        doc.setFontSize(12);
+      }
+      doc.link(rowLeft - 4, cy - 14, colRight - rowLeft + 8, ROW_HEIGHT, {
+        pageNumber: scheduleStartPage,
+      });
+      doc.setLineWidth(0.2);
+      doc.setTextColor(0);
+      doc.setDrawColor(0);
+      cy += ROW_HEIGHT;
     }
 
     if (groupsWithPhotos.length) {
@@ -4816,7 +5007,8 @@
       const entries = (g.photoIds || [])
         .map((pid) => {
           const p = state.photos.get(pid);
-          return p ? addPhoto(p, g.name) : null;
+          if (!p || p.laserCapture) return null;
+          return addPhoto(p, g.name);
         })
         .filter(Boolean);
       pushSection(`g-${g.id}`, g.name, g, entries);
@@ -4825,7 +5017,8 @@
       const entries = (room.photoIds || [])
         .map((pid) => {
           const p = state.photos.get(pid);
-          return p ? addPhoto(p, `${room.name} (${room.habitability})`) : null;
+          if (!p || p.laserCapture) return null;
+          return addPhoto(p, `${room.name} (${room.habitability})`);
         })
         .filter(Boolean);
       pushSection(`r-${room.id}`, `${room.name} (${room.habitability})`, room, entries);
@@ -5348,7 +5541,7 @@ ${nojsFallback}
       let idx = 0;
       for (const pid of g.photoIds || []) {
         const photo = state.photos.get(pid);
-        if (!photo) continue;
+        if (!photo || photo.laserCapture) continue;
         idx += 1;
         walkItems.push({ group: g, room: null, photo, indexInGroup: idx });
       }
@@ -5357,7 +5550,7 @@ ${nojsFallback}
       let idx = 0;
       for (const pid of room.photoIds || []) {
         const photo = state.photos.get(pid);
-        if (!photo) continue;
+        if (!photo || photo.laserCapture) continue;
         idx += 1;
         walkItems.push({ group: room, room, photo, indexInGroup: idx });
       }
@@ -5437,6 +5630,11 @@ ${nojsFallback}
             zip.file("index.html", buildHtmlIndex(photoPaths));
           } catch (err) {
             console.warn("HTML index generation failed.", err);
+          }
+          try {
+            zip.file("window-measurements.html", buildWindowMeasurementsHtml());
+          } catch (err) {
+            console.warn("Window measurements HTML generation failed.", err);
           }
         } else if (numParts > 1) {
           zip.file(
