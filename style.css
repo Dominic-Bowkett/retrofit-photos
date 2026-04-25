@@ -1786,6 +1786,26 @@ input[type="date"]:focus {
 }
 
 /* ---------- Room windows fieldset ---------- */
+.room-windows-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.room-windows-stack-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.room-windows-stack-list:empty + .btn-add-window {
+  align-self: flex-start;
+}
+
+.btn-add-window {
+  align-self: flex-start;
+}
+
 .room-windows {
   margin: 0;
   min-width: 0;
@@ -1796,6 +1816,41 @@ input[type="date"]:focus {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.room-windows-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px;
+}
+
+.room-windows-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+}
+
+.room-windows-remove {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.room-windows-remove:hover {
+  border-color: var(--danger-border);
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .room-windows-row {

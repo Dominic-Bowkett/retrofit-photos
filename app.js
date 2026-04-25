@@ -1062,7 +1062,7 @@
       chimneys: { open: 0, blocked: 0 },
       flues: { open: 0, closed: 0, boiler: 0, other: 0 },
       ventilation: { trickle: 0, core: 0, iev: 0, dmev: 0 },
-      windows: { type: "Double", age: "", gap: "", frame: "", width: "", height: "" },
+      windows: [makeNewWindow()],
       notes: "",
     };
   }
@@ -1096,8 +1096,32 @@
   const WINDOW_AGES = ["Unknown", "Pre 2002", "2002-2021", "2023+"];
   const WINDOW_GAPS = ["6mm", "12mm", "16mm"];
   const WINDOW_FRAMES = ["Wooden", "PVC", "Metal"];
+  const WINDOW_ORIENTATIONS = [
+    "North",
+    "North East",
+    "East",
+    "South East",
+    "South",
+    "South West",
+    "West",
+    "North West",
+  ];
   const WINDOW_AGES_NEEDING_GAP = new Set(["Unknown", "Pre 2002"]);
   const WINDOW_TYPES_NEEDING_FRAME = new Set(["Double", "Triple"]);
+
+  function makeNewWindow(overrides) {
+    return {
+      id: uid("win"),
+      type: "Double",
+      age: "",
+      gap: "",
+      frame: "",
+      width: "",
+      height: "",
+      orientation: "",
+      ...(overrides || {}),
+    };
+  }
 
   function normalizeRoomCounts(room, prop, kinds) {
     const src = room && typeof room[prop] === "object" && room[prop] ? room[prop] : {};
@@ -1129,35 +1153,56 @@
     return normalizeRoomCounts(room, "ventilation", VENTILATION_KINDS);
   }
 
-  function normalizeRoomWindows(room) {
-    const src = room && typeof room.windows === "object" && room.windows ? room.windows : {};
-    let changed = !room.windows || typeof room.windows !== "object";
-    const type = WINDOW_TYPES.includes(src.type) ? src.type : "Double";
-    const age = WINDOW_AGES.includes(src.age) ? src.age : "";
-    const gap = WINDOW_GAPS.includes(src.gap) ? src.gap : "";
-    const frame = WINDOW_FRAMES.includes(src.frame) ? src.frame : "";
-    const width = typeof src.width === "string" ? src.width : "";
-    const height = typeof src.height === "string" ? src.height : "";
-    // Drop fields that aren't currently relevant so stale state can't
-    // resurface if the user toggles age / type back later. Glazing gap
-    // is only meaningful on Double / Triple glazing where the age is
-    // Unknown or Pre 2002 — single glazing has no cavity to measure.
+  // Normalise a single window record in-place. Returns true if anything
+  // about the record changed (so callers can mark the property dirty).
+  function normalizeOneWindow(win) {
+    let changed = false;
+    if (!win.id) { win.id = uid("win"); changed = true; }
+    const type = WINDOW_TYPES.includes(win.type) ? win.type : "Double";
+    const age = WINDOW_AGES.includes(win.age) ? win.age : "";
+    const gap = WINDOW_GAPS.includes(win.gap) ? win.gap : "";
+    const frame = WINDOW_FRAMES.includes(win.frame) ? win.frame : "";
+    const width = typeof win.width === "string" ? win.width : "";
+    const height = typeof win.height === "string" ? win.height : "";
+    const orientation = WINDOW_ORIENTATIONS.includes(win.orientation) ? win.orientation : "";
+    // Glazing gap is only meaningful on Double / Triple where the age
+    // is Unknown or Pre 2002 — single glazing has no cavity to measure.
     const gapAllowed =
       WINDOW_AGES_NEEDING_GAP.has(age) && WINDOW_TYPES_NEEDING_FRAME.has(type);
     const effectiveGap = gapAllowed ? gap : "";
     const effectiveFrame = WINDOW_TYPES_NEEDING_FRAME.has(type) ? frame : "";
-    const out = { type, age, gap: effectiveGap, frame: effectiveFrame, width, height };
     if (
-      src.type !== out.type ||
-      src.age !== out.age ||
-      src.gap !== out.gap ||
-      src.frame !== out.frame ||
-      src.width !== out.width ||
-      src.height !== out.height
+      win.type !== type || win.age !== age ||
+      win.gap !== effectiveGap || win.frame !== effectiveFrame ||
+      win.width !== width || win.height !== height ||
+      win.orientation !== orientation
     ) {
       changed = true;
     }
-    room.windows = out;
+    win.type = type;
+    win.age = age;
+    win.gap = effectiveGap;
+    win.frame = effectiveFrame;
+    win.width = width;
+    win.height = height;
+    win.orientation = orientation;
+    return changed;
+  }
+
+  function normalizeRoomWindows(room) {
+    let changed = false;
+    // Migrate legacy single-object schema to a one-element array.
+    if (room.windows && !Array.isArray(room.windows) && typeof room.windows === "object") {
+      room.windows = [{ ...room.windows }];
+      changed = true;
+    }
+    if (!Array.isArray(room.windows)) {
+      room.windows = [];
+      changed = true;
+    }
+    for (const w of room.windows) {
+      if (normalizeOneWindow(w)) changed = true;
+    }
     return changed;
   }
 
@@ -1976,6 +2021,159 @@
     if (header) header.setAttribute("aria-expanded", String(nowExpanded));
   }
 
+  // Build one window-fieldset DOM node bound to `win` inside `room`.
+  // The fieldset owns its own change listeners so callers don't need
+  // to know the schema; it asks the surrounding stack to re-render
+  // (via stack.__rerender) only when add/remove changes the count.
+  function buildWindowFieldset(room, win, idx) {
+    const tpl = document.getElementById("room-window-template");
+    const node = tpl.content.firstElementChild.cloneNode(true);
+    node.dataset.windowId = win.id;
+
+    const titleEl = node.querySelector(".room-windows-title");
+    if (titleEl) titleEl.textContent = `Window ${idx + 1}`;
+
+    const removeBtn = node.querySelector(".room-windows-remove");
+    if (removeBtn) {
+      removeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const i = room.windows.findIndex((w) => w.id === win.id);
+        if (i === -1) return;
+        room.windows.splice(i, 1);
+        saveProperty();
+        const stack = node.closest(".room-windows-stack");
+        if (stack && typeof stack.__rerender === "function") stack.__rerender();
+      });
+    }
+
+    const winType = node.querySelector(".room-windows-type");
+    const winAge = node.querySelector(".room-windows-age");
+    const winFrame = node.querySelector(".room-windows-frame");
+    const winOrient = node.querySelector(".room-windows-orientation");
+    const winFrameWrap = node.querySelector(".room-windows-frame-wrap");
+    const winGapWrap = node.querySelector(".room-windows-gap-wrap");
+    const winGapBtns = node.querySelectorAll(".room-windows-gap-btn");
+
+    for (const t of WINDOW_TYPES) {
+      const opt = document.createElement("option");
+      opt.value = t;
+      opt.textContent = t;
+      winType.appendChild(opt);
+    }
+    {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "Select age";
+      winAge.appendChild(opt);
+    }
+    for (const a of WINDOW_AGES) {
+      const opt = document.createElement("option");
+      opt.value = a;
+      opt.textContent = a;
+      winAge.appendChild(opt);
+    }
+    for (const f of WINDOW_FRAMES) {
+      const opt = document.createElement("option");
+      opt.value = f;
+      opt.textContent = f;
+      winFrame.appendChild(opt);
+    }
+    {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "Select orientation";
+      winOrient.appendChild(opt);
+    }
+    for (const o of WINDOW_ORIENTATIONS) {
+      const opt = document.createElement("option");
+      opt.value = o;
+      opt.textContent = o;
+      winOrient.appendChild(opt);
+    }
+
+    const applyVisibility = () => {
+      const showFrame = WINDOW_TYPES_NEEDING_FRAME.has(win.type);
+      const showGap =
+        WINDOW_AGES_NEEDING_GAP.has(win.age) &&
+        WINDOW_TYPES_NEEDING_FRAME.has(win.type);
+      winFrameWrap.hidden = !showFrame;
+      winGapWrap.hidden = !showGap;
+    };
+    const applyGapButtons = () => {
+      winGapBtns.forEach((btn) => {
+        const on = btn.dataset.gap === win.gap;
+        btn.classList.toggle("is-on", on);
+        btn.setAttribute("aria-pressed", String(on));
+      });
+    };
+    const commit = () => {
+      normalizeOneWindow(win);
+      applyVisibility();
+      applyGapButtons();
+      rememberWindowDefaults(win);
+      saveProperty();
+    };
+
+    winType.value = win.type || "Double";
+    winAge.value = win.age || "";
+    winFrame.value = win.frame || "";
+    winOrient.value = win.orientation || "";
+    applyVisibility();
+    applyGapButtons();
+
+    const winWidth = node.querySelector(".room-windows-width");
+    const winHeight = node.querySelector(".room-windows-height");
+    if (winWidth) {
+      winWidth.value = win.width || "";
+      winWidth.addEventListener("input", () => {
+        win.width = winWidth.value;
+        // Don't propagate measurements to lastWindowDefaults — the
+        // user explicitly asked that next-window seeds skip W/H.
+        saveProperty();
+      });
+      winWidth.addEventListener("click", (e) => e.stopPropagation());
+    }
+    if (winHeight) {
+      winHeight.value = win.height || "";
+      winHeight.addEventListener("input", () => {
+        win.height = winHeight.value;
+        saveProperty();
+      });
+      winHeight.addEventListener("click", (e) => e.stopPropagation());
+    }
+    const captureBtn = node.querySelector(".btn-capture-laser");
+    if (captureBtn) {
+      captureBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        startLaserCapture(room, win);
+      });
+    }
+
+    winType.addEventListener("change", () => { win.type = winType.value; commit(); });
+    winType.addEventListener("click", (e) => e.stopPropagation());
+    winAge.addEventListener("change", () => { win.age = winAge.value; commit(); });
+    winAge.addEventListener("click", (e) => e.stopPropagation());
+    winFrame.addEventListener("change", () => { win.frame = winFrame.value; commit(); });
+    winFrame.addEventListener("click", (e) => e.stopPropagation());
+    winOrient.addEventListener("change", () => {
+      win.orientation = winOrient.value;
+      // Orientation is per-window only — never sent to the seed.
+      normalizeOneWindow(win);
+      saveProperty();
+    });
+    winOrient.addEventListener("click", (e) => e.stopPropagation());
+    winGapBtns.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const next = btn.dataset.gap;
+        win.gap = win.gap === next ? "" : next;
+        commit();
+      });
+    });
+
+    return node;
+  }
+
   function renderRoom(room) {
     const node = els.roomTpl.content.firstElementChild.cloneNode(true);
     node.dataset.roomId = room.id;
@@ -2115,123 +2313,26 @@
 
     // ----- Windows -----
     normalizeRoomWindows(room);
-    const winRoot = node.querySelector(".room-windows");
-    if (winRoot) {
-      const winType = winRoot.querySelector(".room-windows-type");
-      const winAge = winRoot.querySelector(".room-windows-age");
-      const winFrame = winRoot.querySelector(".room-windows-frame");
-      const winFrameWrap = winRoot.querySelector(".room-windows-frame-wrap");
-      const winGapWrap = winRoot.querySelector(".room-windows-gap-wrap");
-      const winGapBtns = winRoot.querySelectorAll(".room-windows-gap-btn");
-
-      for (const t of WINDOW_TYPES) {
-        const opt = document.createElement("option");
-        opt.value = t;
-        opt.textContent = t;
-        winType.appendChild(opt);
-      }
-      // Age dropdown leads with a blank "Select age" placeholder so an
-      // unset age is visibly distinct from an explicit "Unknown".
-      {
-        const opt = document.createElement("option");
-        opt.value = "";
-        opt.textContent = "Select age";
-        winAge.appendChild(opt);
-      }
-      for (const a of WINDOW_AGES) {
-        const opt = document.createElement("option");
-        opt.value = a;
-        opt.textContent = a;
-        winAge.appendChild(opt);
-      }
-      for (const f of WINDOW_FRAMES) {
-        const opt = document.createElement("option");
-        opt.value = f;
-        opt.textContent = f;
-        winFrame.appendChild(opt);
-      }
-
-      const applyVisibility = () => {
-        const showFrame = WINDOW_TYPES_NEEDING_FRAME.has(room.windows.type);
-        const showGap =
-          WINDOW_AGES_NEEDING_GAP.has(room.windows.age) &&
-          WINDOW_TYPES_NEEDING_FRAME.has(room.windows.type);
-        winFrameWrap.hidden = !showFrame;
-        winGapWrap.hidden = !showGap;
-      };
-      const applyGapButtons = () => {
-        winGapBtns.forEach((btn) => {
-          const on = btn.dataset.gap === room.windows.gap;
-          btn.classList.toggle("is-on", on);
-          btn.setAttribute("aria-pressed", String(on));
+    const winStack = node.querySelector(".room-windows-stack");
+    const winList = winStack ? winStack.querySelector(".room-windows-stack-list") : null;
+    const addWindowBtn = winStack ? winStack.querySelector(".btn-add-window") : null;
+    if (winList && addWindowBtn) {
+      const renderWindows = () => {
+        winList.innerHTML = "";
+        room.windows.forEach((win, idx) => {
+          winList.appendChild(buildWindowFieldset(room, win, idx));
         });
       };
-      const commitWindows = () => {
+      renderWindows();
+      // Re-rendering callback so child fieldsets can ask the parent to
+      // refresh after add / remove without each one wiring it up itself.
+      winStack.__rerender = renderWindows;
+      addWindowBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        room.windows.push(seedFromDefaults());
         normalizeRoomWindows(room);
-        applyVisibility();
-        applyGapButtons();
-        rememberWindowDefaults(room.windows);
+        renderWindows();
         saveProperty();
-      };
-
-      winType.value = room.windows.type || "Double";
-      winAge.value = room.windows.age || "";
-      winFrame.value = room.windows.frame || "";
-      applyVisibility();
-      applyGapButtons();
-
-      // Width / Height free-text inputs (with optional laser-screen capture).
-      const winWidth = winRoot.querySelector(".room-windows-width");
-      const winHeight = winRoot.querySelector(".room-windows-height");
-      if (winWidth) {
-        winWidth.value = room.windows.width || "";
-        winWidth.addEventListener("input", () => {
-          room.windows.width = winWidth.value;
-          rememberWindowDefaults(room.windows);
-          saveProperty();
-        });
-        winWidth.addEventListener("click", (e) => e.stopPropagation());
-      }
-      if (winHeight) {
-        winHeight.value = room.windows.height || "";
-        winHeight.addEventListener("input", () => {
-          room.windows.height = winHeight.value;
-          rememberWindowDefaults(room.windows);
-          saveProperty();
-        });
-        winHeight.addEventListener("click", (e) => e.stopPropagation());
-      }
-      const captureBtn = winRoot.querySelector(".btn-capture-laser");
-      if (captureBtn) {
-        captureBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          startLaserCapture(room);
-        });
-      }
-
-      winType.addEventListener("change", () => {
-        room.windows.type = winType.value;
-        commitWindows();
-      });
-      winType.addEventListener("click", (e) => e.stopPropagation());
-      winAge.addEventListener("change", () => {
-        room.windows.age = winAge.value;
-        commitWindows();
-      });
-      winAge.addEventListener("click", (e) => e.stopPropagation());
-      winFrame.addEventListener("change", () => {
-        room.windows.frame = winFrame.value;
-        commitWindows();
-      });
-      winFrame.addEventListener("click", (e) => e.stopPropagation());
-      winGapBtns.forEach((btn) => {
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const next = btn.dataset.gap;
-          // Tap the active chip to clear it; otherwise switch to it.
-          room.windows.gap = room.windows.gap === next ? "" : next;
-          commitWindows();
-        });
       });
     }
 
@@ -2284,11 +2385,13 @@
       (r) => r.roomType === room.roomType
     ).length;
     if (existingSame > 0) room.name = `${room.roomType} ${existingSame + 1}`;
-    // Seed windows from the most recently entered window data so the
-    // assessor doesn't have to repeat themselves on every room. Falls
-    // back to whatever makeRoom set otherwise.
-    const seed = lastWindowDefaults();
-    if (seed) room.windows = { ...seed };
+    // Seed the room's first window from the most recently entered
+    // window data so the assessor doesn't repeat themselves on every
+    // room. Orientation and the actual measurements (width / height)
+    // deliberately reset — each window is on a different wall and
+    // has its own size.
+    const seed = seedFromDefaults();
+    if (seed) room.windows = [seed];
     normalizeRoomWindows(room);
     if (!Array.isArray(state.property.rooms)) state.property.rooms = [];
     state.property.rooms.push(room);
@@ -2301,7 +2404,8 @@
   }
 
   // Pull the seed-windows defaults — first preference is the property's
-  // remembered "last entered" snapshot, second is the most recent room.
+  // remembered "last entered" snapshot, second is the most recent room
+  // that actually has a window record.
   function lastWindowDefaults() {
     const meta = state.property && state.property.meta;
     if (meta && meta.lastWindowDefaults && typeof meta.lastWindowDefaults === "object") {
@@ -2309,18 +2413,36 @@
     }
     const rooms = (state.property && state.property.rooms) || [];
     for (let i = rooms.length - 1; i >= 0; i--) {
-      const w = rooms[i] && rooms[i].windows;
-      if (w && typeof w === "object") return w;
+      const list = rooms[i] && rooms[i].windows;
+      if (Array.isArray(list) && list.length) {
+        const w = list[list.length - 1];
+        if (w && typeof w === "object") return w;
+      }
     }
     return null;
   }
 
-  function rememberWindowDefaults(windows) {
-    if (!state.property) return;
+  function rememberWindowDefaults(window) {
+    if (!state.property || !window || typeof window !== "object") return;
     if (!state.property.meta || typeof state.property.meta !== "object") {
       state.property.meta = {};
     }
-    state.property.meta.lastWindowDefaults = { ...windows };
+    // Strip the per-window id so it isn't reused as a seed.
+    const { id: _ignore, ...rest } = window;
+    state.property.meta.lastWindowDefaults = { ...rest };
+  }
+
+  // Build a fresh window seeded from the last-entered defaults, but
+  // never carrying over the per-instance fields: orientation (each
+  // window is on a different wall) and the measurements (each window
+  // has its own size).
+  function seedFromDefaults() {
+    const seed = lastWindowDefaults();
+    return makeNewWindow(
+      seed
+        ? { type: seed.type, age: seed.age, gap: seed.gap, frame: seed.frame }
+        : {}
+    );
   }
 
   function removeRoom(roomId) {
@@ -3401,12 +3523,21 @@
     toast(`Added ${photos.length} photo${photos.length === 1 ? "" : "s"} to ${group.name}.`);
 
     if (laserCapture && photos.length && isRoomPhoto && owner.room.id === laserCapture.roomId) {
-      // Run the laser-screen analysis on the most recent photo and pop
-      // the picker dialog so the user can assign width / height.
-      runLaserPicker(owner.room, photos[photos.length - 1]).catch((err) => {
-        console.error("laser picker failed", err);
-        toast(err && err.message ? err.message : "Couldn't read the laser screen.", "err");
-      });
+      // Run the laser-screen analysis silently in the background — the
+      // user keeps interacting with the app, the result lands as a
+      // toast when it's done.
+      const targetWin =
+        (owner.room.windows || []).find((w) => w.id === laserCapture.windowId) ||
+        (owner.room.windows || [])[0] ||
+        null;
+      if (targetWin) {
+        runLaserAutoFill(owner.room, targetWin, photos[photos.length - 1]).catch((err) => {
+          console.error("laser auto-fill failed", err);
+          toast(err && err.message ? err.message : "Couldn't read the laser screen.", "err");
+        });
+      } else {
+        toast("Add a window to this room before capturing from the laser.", "err");
+      }
     }
   }
 
@@ -3726,20 +3857,19 @@
   // we open the camera with a pendingLaserCapture marker → after the
   // photo commits, runLaserPicker analyses it with the laser_measurement
   // preset and pops the picker dialog.
-  function startLaserCapture(room) {
+  function startLaserCapture(room, win) {
     const apiKey = getClaudeApiKey();
     if (!apiKey) {
       toast("Set a Claude API key in Settings before capturing from the laser screen.", "err");
       return;
     }
-    camera.pendingLaserCapture = { roomId: room.id };
+    camera.pendingLaserCapture = { roomId: room.id, windowId: win ? win.id : null };
     openCamera(room);
   }
 
-  async function runLaserPicker(room, photo) {
+  async function runLaserAutoFill(room, win, photo) {
     let analysis;
     try {
-      toast("Reading the laser screen…");
       analysis = await runPhotoAnalysis(photo, "laser_measurement");
     } catch (err) {
       toast(err && err.message ? err.message : "Couldn't read the laser screen.", "err");
@@ -3779,8 +3909,8 @@
       return;
     }
 
-    // Smallest reading → Width, largest → Height. If only one reading
-    // is available, set it as Width and leave Height untouched.
+    // Width = longest reading, Height = shortest. Single-reading
+    // captures fill Width only and leave Height untouched.
     let smallest = valued[0];
     let largest = valued[0];
     for (const v of valued) {
@@ -3788,24 +3918,31 @@
       if (v.valueM > largest.valueM) largest = v;
     }
 
-    room.windows.width = smallest.display;
-    if (largest !== smallest) room.windows.height = largest.display;
-    normalizeRoomWindows(room);
-    rememberWindowDefaults(room.windows);
+    // Make sure the target window still belongs to this room (the user
+    // could have removed it while the analysis was in flight).
+    const stillThere = (room.windows || []).some((w) => w.id === win.id);
+    if (!stillThere) return;
+
+    win.width = largest.display;
+    if (largest !== smallest) win.height = smallest.display;
+    normalizeOneWindow(win);
     saveProperty();
 
-    // Refresh the visible inputs in the room card.
-    const node = document.querySelector(`[data-room-id="${room.id}"]`);
+    // Refresh the visible inputs for this specific window if its row
+    // is currently rendered. Other interactions stay live throughout.
+    const node = document.querySelector(
+      `[data-room-id="${room.id}"] [data-window-id="${win.id}"]`
+    );
     if (node) {
       const w = node.querySelector(".room-windows-width");
       const h = node.querySelector(".room-windows-height");
-      if (w) w.value = room.windows.width;
-      if (h) h.value = room.windows.height;
+      if (w) w.value = win.width;
+      if (h) h.value = win.height;
     }
     toast(
       largest === smallest
-        ? `Width set to ${smallest.display}.`
-        : `Width ${smallest.display} · Height ${largest.display}.`
+        ? `Width set to ${largest.display}.`
+        : `Width ${largest.display} · Height ${smallest.display}.`
     );
   }
 
@@ -4026,8 +4163,10 @@
   const WINDOW_SCHEDULE_COLUMNS = [
     { key: "room", label: "Room" },
     { key: "habitability", label: "Habitability" },
+    { key: "windowLabel", label: "Window" },
     { key: "type", label: "Type" },
     { key: "age", label: "Age" },
+    { key: "orientation", label: "Orientation" },
     { key: "frame", label: "Frame" },
     { key: "gap", label: "Glazing gap" },
     { key: "width", label: "Width" },
@@ -4036,19 +4175,37 @@
 
   function buildWindowScheduleRows() {
     const rooms = (state.property && state.property.rooms) || [];
-    return rooms.map((room) => {
-      const w = room.windows || {};
-      return {
-        room: room.name || room.roomType || "Room",
-        habitability: room.habitability || "",
-        type: w.type || "",
-        age: w.age || "",
-        frame: w.frame || "",
-        gap: w.gap || "",
-        width: w.width || "",
-        height: w.height || "",
-      };
-    });
+    const rows = [];
+    for (const room of rooms) {
+      const wins = Array.isArray(room.windows) ? room.windows : [];
+      if (!wins.length) {
+        // Surface rooms with no recorded windows so the schedule still
+        // shows them. Empty cells render as "—".
+        rows.push({
+          room: room.name || room.roomType || "Room",
+          habitability: room.habitability || "",
+          windowLabel: "—",
+          type: "", age: "", orientation: "",
+          frame: "", gap: "", width: "", height: "",
+        });
+        continue;
+      }
+      wins.forEach((w, idx) => {
+        rows.push({
+          room: room.name || room.roomType || "Room",
+          habitability: room.habitability || "",
+          windowLabel: wins.length > 1 ? `Window ${idx + 1}` : "Window",
+          type: w.type || "",
+          age: w.age || "",
+          orientation: w.orientation || "",
+          frame: w.frame || "",
+          gap: w.gap || "",
+          width: w.width || "",
+          height: w.height || "",
+        });
+      });
+    }
+    return rows;
   }
 
   function buildWindowMeasurementsHtml() {
@@ -4506,7 +4663,9 @@ td:empty::before,td.empty{color:#94a3b8;content:"—"}
       const tableLeft = margin;
       const tableRight = pageW - margin;
       const tableW = tableRight - tableLeft;
-      const colWeights = [3, 2, 1.6, 1.8, 1.5, 1.6, 1.8, 1.8]; // sums to ~15.1
+      // Weights for: Room | Habitability | Window | Type | Age |
+      //              Orientation | Frame | Glazing gap | Width | Height.
+      const colWeights = [2.4, 1.6, 1.2, 1.1, 1.4, 1.6, 1.2, 1.4, 1.4, 1.4];
       const totalWeight = colWeights.reduce((a, b) => a + b, 0);
       const colWidths = colWeights.map((w) => (w / totalWeight) * tableW);
       const colX = [tableLeft];

@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="stylesheet" href="style.css?v=14" />
+    <link rel="stylesheet" href="style.css?v=15" />
   </head>
   <body>
     <header class="app-header">
@@ -318,45 +318,10 @@
               <input type="number" class="room-count-input" data-count="ventilation" data-key="dmev" min="0" max="999" step="1" maxlength="3" inputmode="numeric" />
             </label>
           </fieldset>
-          <fieldset class="room-windows" aria-label="Windows">
-            <legend class="room-counts-legend">Windows</legend>
-            <div class="room-windows-row">
-              <label class="room-windows-field">
-                <span class="room-windows-label">Type</span>
-                <select class="room-windows-type" aria-label="Window type"></select>
-              </label>
-              <label class="room-windows-field">
-                <span class="room-windows-label">Age</span>
-                <select class="room-windows-age" aria-label="Window age"></select>
-              </label>
-              <label class="room-windows-field room-windows-frame-wrap">
-                <span class="room-windows-label">Frame</span>
-                <select class="room-windows-frame" aria-label="Frame type"></select>
-              </label>
-            </div>
-            <div class="room-windows-gap-wrap" hidden>
-              <span class="room-windows-label">Glazing gap</span>
-              <div class="room-windows-gap-row" role="group" aria-label="Glazing gap">
-                <button type="button" class="room-windows-gap-btn" data-gap="6mm" aria-pressed="false">6mm</button>
-                <button type="button" class="room-windows-gap-btn" data-gap="12mm" aria-pressed="false">12mm</button>
-                <button type="button" class="room-windows-gap-btn" data-gap="16mm" aria-pressed="false">16mm</button>
-              </div>
-            </div>
-            <div class="room-windows-size-row">
-              <label class="room-windows-field room-windows-size">
-                <span class="room-windows-label">Width</span>
-                <input type="text" class="room-windows-width" inputmode="decimal" placeholder="e.g. 1.250 m" />
-              </label>
-              <label class="room-windows-field room-windows-size">
-                <span class="room-windows-label">Height</span>
-                <input type="text" class="room-windows-height" inputmode="decimal" placeholder="e.g. 1.500 m" />
-              </label>
-              <button type="button" class="btn btn-primary-soft btn-capture-laser" title="Take a photo of the laser measurer's screen and pick width/height from the readings">
-                <span aria-hidden="true">📷</span>
-                <span>Capture from laser</span>
-              </button>
-            </div>
-          </fieldset>
+          <div class="room-windows-stack" aria-label="Windows">
+            <div class="room-windows-stack-list"></div>
+            <button type="button" class="btn btn-primary-soft btn-add-window">+ Add window</button>
+          </div>
           <label class="room-notes">
             <span class="room-counts-legend">Notes</span>
             <textarea class="room-notes-input" rows="3" placeholder="Free-text notes for this room…" spellcheck="true"></textarea>
@@ -373,6 +338,55 @@
           </div>
         </div>
       </article>
+    </template>
+
+    <template id="room-window-template">
+      <fieldset class="room-windows" aria-label="Window">
+        <legend class="room-counts-legend room-windows-legend">
+          <span class="room-windows-title">Window</span>
+          <button type="button" class="room-windows-remove" aria-label="Remove this window">✕</button>
+        </legend>
+        <div class="room-windows-row">
+          <label class="room-windows-field">
+            <span class="room-windows-label">Type</span>
+            <select class="room-windows-type" aria-label="Window type"></select>
+          </label>
+          <label class="room-windows-field">
+            <span class="room-windows-label">Age</span>
+            <select class="room-windows-age" aria-label="Window age"></select>
+          </label>
+          <label class="room-windows-field">
+            <span class="room-windows-label">Orientation</span>
+            <select class="room-windows-orientation" aria-label="Orientation"></select>
+          </label>
+          <label class="room-windows-field room-windows-frame-wrap">
+            <span class="room-windows-label">Frame</span>
+            <select class="room-windows-frame" aria-label="Frame type"></select>
+          </label>
+        </div>
+        <div class="room-windows-gap-wrap" hidden>
+          <span class="room-windows-label">Glazing gap</span>
+          <div class="room-windows-gap-row" role="group" aria-label="Glazing gap">
+            <button type="button" class="room-windows-gap-btn" data-gap="6mm" aria-pressed="false">6mm</button>
+            <button type="button" class="room-windows-gap-btn" data-gap="12mm" aria-pressed="false">12mm</button>
+            <button type="button" class="room-windows-gap-btn" data-gap="16mm" aria-pressed="false">16mm</button>
+          </div>
+        </div>
+        <div class="room-windows-size-row">
+          <label class="room-windows-field room-windows-size">
+            <span class="room-windows-label">Width</span>
+            <input type="text" class="room-windows-width" inputmode="decimal" placeholder="e.g. 1.250 m" />
+          </label>
+          <label class="room-windows-field room-windows-size">
+            <span class="room-windows-label">Height</span>
+            <input type="text" class="room-windows-height" inputmode="decimal" placeholder="e.g. 1.500 m" />
+          </label>
+          <button type="button" class="btn btn-primary-soft btn-capture-laser" title="Take a photo of the laser measurer's screen — width = longest reading, height = shortest">
+            <span aria-hidden="true">📷</span>
+            <span>Capture from laser</span>
+          </button>
+        </div>
+      </fieldset>
     </template>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
@@ -579,6 +593,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
-    <script src="app.js?v=14"></script>
+    <script src="app.js?v=15"></script>
   </body>
 </html>
