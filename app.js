@@ -1251,15 +1251,10 @@
 
   // -------------------- Groups / photos rendering --------------------
   function initExpandedForProperty() {
+    // Default to fully collapsed on load and on view-switch — the user
+    // opens what they need. Newly-added rooms / groups still register
+    // themselves in state.expanded at creation so they appear open.
     state.expanded.clear();
-    if (state.view === "tag") {
-      for (const t of ROOM_TAGS) state.expanded.add(tagGroupId(t));
-    } else {
-      const ext = (state.property.groups || []).find(
-        (g) => !g.section && (g.name || "").toLowerCase() === "external elevations"
-      );
-      if (ext) state.expanded.add(ext.id);
-    }
   }
 
   function tagGroupId(tag) {
@@ -5400,7 +5395,7 @@ ${nojsFallback}
   // Floating pill that appears whenever at least one accordion is open
   // and the user has scrolled below the top of the page. A tap
   // collapses every expanded card — Job details, all flat groups, and
-  // all rooms — and slides the viewport back to the top. The simple
+  // all rooms — without changing the scroll position. The simple
   // "any-open + scrollY > 120" rule sidesteps iOS PWA scroll-event
   // quirks that made the previous per-card detection unreliable.
   (function wireCollapseFab() {
@@ -5470,8 +5465,8 @@ ${nojsFallback}
 
     fab.addEventListener("click", () => {
       collapseAll();
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      // Hide straight away — no need to wait for the scroll to finish.
+      // Hide straight away — no scroll-to-top so the user keeps their
+      // place on the page.
       fab.hidden = true;
     });
 
