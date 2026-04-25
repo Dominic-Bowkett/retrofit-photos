@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="stylesheet" href="style.css?v=10" />
+    <link rel="stylesheet" href="style.css?v=11" />
   </head>
   <body>
     <header class="app-header">
@@ -126,7 +126,6 @@
               <div><dt>Core</dt><dd id="totals-vent-core">0</dd></div>
               <div><dt>IEV</dt><dd id="totals-vent-iev">0</dd></div>
               <div><dt>DMEV</dt><dd id="totals-vent-dmev">0</dd></div>
-              <div><dt>Passive</dt><dd id="totals-vent-passive">0</dd></div>
             </dl>
           </div>
         </div>
@@ -293,7 +292,7 @@
             </label>
             <label class="room-count">
               <span class="room-count-label">Boiler</span>
-              <input type="number" class="room-count-input" data-count="flues" data-key="boiler" min="0" max="999" step="1" maxlength="3" inputmode="numeric" />
+              <input type="number" class="room-count-input" data-count="flues" data-key="boiler" min="0" max="999" step="1" maxlength="3" inputmode="numeric" value="0" />
             </label>
             <label class="room-count">
               <span class="room-count-label">Other</span>
@@ -318,11 +317,36 @@
               <span class="room-count-label">DMEV</span>
               <input type="number" class="room-count-input" data-count="ventilation" data-key="dmev" min="0" max="999" step="1" maxlength="3" inputmode="numeric" />
             </label>
-            <label class="room-count">
-              <span class="room-count-label">Passive</span>
-              <input type="number" class="room-count-input" data-count="ventilation" data-key="passive" min="0" max="999" step="1" maxlength="3" inputmode="numeric" />
-            </label>
           </fieldset>
+          <fieldset class="room-windows" aria-label="Windows">
+            <legend class="room-counts-legend">Windows</legend>
+            <div class="room-windows-row">
+              <label class="room-windows-field">
+                <span class="room-windows-label">Type</span>
+                <select class="room-windows-type" aria-label="Window type"></select>
+              </label>
+              <label class="room-windows-field">
+                <span class="room-windows-label">Age</span>
+                <select class="room-windows-age" aria-label="Window age"></select>
+              </label>
+              <label class="room-windows-field room-windows-frame-wrap">
+                <span class="room-windows-label">Frame</span>
+                <select class="room-windows-frame" aria-label="Frame type"></select>
+              </label>
+            </div>
+            <div class="room-windows-gap-wrap" hidden>
+              <span class="room-windows-label">Glazing gap</span>
+              <div class="room-windows-gap-row" role="group" aria-label="Glazing gap">
+                <button type="button" class="room-windows-gap-btn" data-gap="6mm" aria-pressed="false">6mm</button>
+                <button type="button" class="room-windows-gap-btn" data-gap="12mm" aria-pressed="false">12mm</button>
+                <button type="button" class="room-windows-gap-btn" data-gap="16mm" aria-pressed="false">16mm</button>
+              </div>
+            </div>
+          </fieldset>
+          <label class="room-notes">
+            <span class="room-counts-legend">Notes</span>
+            <textarea class="room-notes-input" rows="3" placeholder="Free-text notes for this room…" spellcheck="true"></textarea>
+          </label>
           <div class="room-photos">
             <div class="thumbs">
               <button type="button" class="thumb thumb-add btn-take-photo-tile" title="Take another photo">
@@ -541,6 +565,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
-    <script src="app.js?v=10"></script>
+    <script src="app.js?v=11"></script>
   </body>
 </html>

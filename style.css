@@ -1785,6 +1785,122 @@ input[type="date"]:focus {
   border-color: var(--accent);
 }
 
+/* ---------- Room windows fieldset ---------- */
+.room-windows {
+  margin: 0;
+  min-width: 0;
+  padding: 8px 12px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--accent-softer);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.room-windows-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.room-windows-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 130px;
+  min-width: 110px;
+}
+
+.room-windows-label {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.room-windows select {
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.room-windows select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.room-windows-frame-wrap[hidden],
+.room-windows-gap-wrap[hidden] {
+  display: none;
+}
+
+.room-windows-gap-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.room-windows-gap-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.room-windows-gap-btn {
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.room-windows-gap-btn.is-on {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* ---------- Room notes ---------- */
+.room-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.room-notes-input {
+  width: 100%;
+  min-height: 70px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.room-notes-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
 /* ---------- Room-tag dropdown on a thumb ---------- */
 .thumb-roomtag {
   /* Fill whatever space the building select leaves in the tagbar. On

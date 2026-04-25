@@ -1013,7 +1013,9 @@
       lights: { led: 0, cfl: 0, incandescent: 0 },
       chimneys: { open: 0, blocked: 0 },
       flues: { open: 0, closed: 0, boiler: 0, other: 0 },
-      ventilation: { trickle: 0, core: 0, iev: 0, dmev: 0, passive: 0 },
+      ventilation: { trickle: 0, core: 0, iev: 0, dmev: 0 },
+      windows: { type: "Double", age: "", gap: "", frame: "" },
+      notes: "",
     };
   }
 
@@ -1040,8 +1042,14 @@
     { key: "core", label: "Core Vents" },
     { key: "iev", label: "IEV" },
     { key: "dmev", label: "DMEV" },
-    { key: "passive", label: "Passive" },
   ];
+
+  const WINDOW_TYPES = ["Single", "Double", "Triple"];
+  const WINDOW_AGES = ["Unknown", "Pre 2002", "2002-2021", "2023+"];
+  const WINDOW_GAPS = ["6mm", "12mm", "16mm"];
+  const WINDOW_FRAMES = ["Wooden", "PVC", "Metal"];
+  const WINDOW_AGES_NEEDING_GAP = new Set(["Unknown", "Pre 2002"]);
+  const WINDOW_TYPES_NEEDING_FRAME = new Set(["Double", "Triple"]);
 
   function normalizeRoomCounts(room, prop, kinds) {
     const src = room && typeof room[prop] === "object" && room[prop] ? room[prop] : {};
@@ -1071,6 +1079,36 @@
 
   function normalizeRoomVentilation(room) {
     return normalizeRoomCounts(room, "ventilation", VENTILATION_KINDS);
+  }
+
+  function normalizeRoomWindows(room) {
+    const src = room && typeof room.windows === "object" && room.windows ? room.windows : {};
+    let changed = !room.windows || typeof room.windows !== "object";
+    const type = WINDOW_TYPES.includes(src.type) ? src.type : "Double";
+    const age = WINDOW_AGES.includes(src.age) ? src.age : "";
+    const gap = WINDOW_GAPS.includes(src.gap) ? src.gap : "";
+    const frame = WINDOW_FRAMES.includes(src.frame) ? src.frame : "";
+    // Drop fields that aren't currently relevant so stale state can't
+    // resurface if the user toggles age / type back later.
+    const effectiveGap = WINDOW_AGES_NEEDING_GAP.has(age) ? gap : "";
+    const effectiveFrame = WINDOW_TYPES_NEEDING_FRAME.has(type) ? frame : "";
+    const out = { type, age, gap: effectiveGap, frame: effectiveFrame };
+    if (
+      src.type !== out.type ||
+      src.age !== out.age ||
+      src.gap !== out.gap ||
+      src.frame !== out.frame
+    ) {
+      changed = true;
+    }
+    room.windows = out;
+    return changed;
+  }
+
+  function normalizeRoomNotes(room) {
+    if (typeof room.notes === "string") return false;
+    room.notes = "";
+    return true;
   }
 
   function migrateRooms(property, photosMap) {
@@ -1133,6 +1171,8 @@
       if (normalizeRoomChimneys(room)) changed = true;
       if (normalizeRoomFlues(room)) changed = true;
       if (normalizeRoomVentilation(room)) changed = true;
+      if (normalizeRoomWindows(room)) changed = true;
+      if (normalizeRoomNotes(room)) changed = true;
       if (typeof room.heated !== "boolean") {
         room.heated = true;
         changed = true;
@@ -1809,7 +1849,7 @@
     let led = 0, cfl = 0, inc = 0;
     let chimOpen = 0, chimBlocked = 0;
     let flueOpen = 0, flueClosed = 0, flueBoiler = 0, flueOther = 0;
-    let ventTrickle = 0, ventCore = 0, ventIev = 0, ventDmev = 0, ventPassive = 0;
+    let ventTrickle = 0, ventCore = 0, ventIev = 0, ventDmev = 0;
     for (const r of rooms) {
       if (r.habitability === "Habitable") {
         if (r.heated === false) unheated++;
@@ -1832,7 +1872,6 @@
       ventCore += Number(v.core) || 0;
       ventIev += Number(v.iev) || 0;
       ventDmev += Number(v.dmev) || 0;
-      ventPassive += Number(v.passive) || 0;
     }
     const set = (id, n) => {
       const el = document.getElementById(id);
@@ -1853,7 +1892,6 @@
     set("totals-vent-core", ventCore);
     set("totals-vent-iev", ventIev);
     set("totals-vent-dmev", ventDmev);
-    set("totals-vent-passive", ventPassive);
   }
 
   function expandRoom(room) {
@@ -1986,11 +2024,19 @@
     // Both the Lights and Chimneys fieldsets render the same kind of
     // numeric input — wire them up uniformly via data-count="<bucket>"
     // and data-key="<key>" so the bucket grows by adding HTML alone.
+    // Boiler flues default to a visible 0 — assessors mark it explicitly,
+    // so a literal zero is more useful than a blank field.
+    const showZero = (bucket, key) => bucket === "flues" && key === "boiler";
+    const renderCount = (bucket, key) => {
+      const v = room[bucket][key];
+      if (v > 0) return String(v);
+      return showZero(bucket, key) ? "0" : "";
+    };
     node.querySelectorAll(".room-count-input").forEach((input) => {
       const bucket = input.dataset.count;
       const key = input.dataset.key;
       if (!bucket || !key || !room[bucket] || !(key in room[bucket])) return;
-      input.value = room[bucket][key] > 0 ? String(room[bucket][key]) : "";
+      input.value = renderCount(bucket, key);
       input.addEventListener("input", () => {
         const n = Number(input.value);
         room[bucket][key] = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
@@ -1998,11 +2044,114 @@
         renderTotals();
       });
       input.addEventListener("blur", () => {
-        // Snap "03" to "3" and clear the field when the count is zero.
-        input.value = room[bucket][key] > 0 ? String(room[bucket][key]) : "";
+        // Snap "03" to "3" and clear non-Boiler zeros to a blank field.
+        input.value = renderCount(bucket, key);
       });
       input.addEventListener("click", (e) => e.stopPropagation());
     });
+
+    // ----- Windows -----
+    normalizeRoomWindows(room);
+    const winRoot = node.querySelector(".room-windows");
+    if (winRoot) {
+      const winType = winRoot.querySelector(".room-windows-type");
+      const winAge = winRoot.querySelector(".room-windows-age");
+      const winFrame = winRoot.querySelector(".room-windows-frame");
+      const winFrameWrap = winRoot.querySelector(".room-windows-frame-wrap");
+      const winGapWrap = winRoot.querySelector(".room-windows-gap-wrap");
+      const winGapBtns = winRoot.querySelectorAll(".room-windows-gap-btn");
+
+      for (const t of WINDOW_TYPES) {
+        const opt = document.createElement("option");
+        opt.value = t;
+        opt.textContent = t;
+        winType.appendChild(opt);
+      }
+      // Age dropdown leads with a blank "Select age" placeholder so an
+      // unset age is visibly distinct from an explicit "Unknown".
+      {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "Select age";
+        winAge.appendChild(opt);
+      }
+      for (const a of WINDOW_AGES) {
+        const opt = document.createElement("option");
+        opt.value = a;
+        opt.textContent = a;
+        winAge.appendChild(opt);
+      }
+      for (const f of WINDOW_FRAMES) {
+        const opt = document.createElement("option");
+        opt.value = f;
+        opt.textContent = f;
+        winFrame.appendChild(opt);
+      }
+
+      const applyVisibility = () => {
+        const showFrame = WINDOW_TYPES_NEEDING_FRAME.has(room.windows.type);
+        const showGap = WINDOW_AGES_NEEDING_GAP.has(room.windows.age);
+        winFrameWrap.hidden = !showFrame;
+        winGapWrap.hidden = !showGap;
+      };
+      const applyGapButtons = () => {
+        winGapBtns.forEach((btn) => {
+          const on = btn.dataset.gap === room.windows.gap;
+          btn.classList.toggle("is-on", on);
+          btn.setAttribute("aria-pressed", String(on));
+        });
+      };
+      const commitWindows = () => {
+        normalizeRoomWindows(room);
+        applyVisibility();
+        applyGapButtons();
+        rememberWindowDefaults(room.windows);
+        saveProperty();
+      };
+
+      winType.value = room.windows.type || "Double";
+      winAge.value = room.windows.age || "";
+      winFrame.value = room.windows.frame || "";
+      applyVisibility();
+      applyGapButtons();
+
+      winType.addEventListener("change", () => {
+        room.windows.type = winType.value;
+        commitWindows();
+      });
+      winType.addEventListener("click", (e) => e.stopPropagation());
+      winAge.addEventListener("change", () => {
+        room.windows.age = winAge.value;
+        commitWindows();
+      });
+      winAge.addEventListener("click", (e) => e.stopPropagation());
+      winFrame.addEventListener("change", () => {
+        room.windows.frame = winFrame.value;
+        commitWindows();
+      });
+      winFrame.addEventListener("click", (e) => e.stopPropagation());
+      winGapBtns.forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const next = btn.dataset.gap;
+          // Tap the active chip to clear it; otherwise switch to it.
+          room.windows.gap = room.windows.gap === next ? "" : next;
+          commitWindows();
+        });
+      });
+    }
+
+    // ----- Notes -----
+    normalizeRoomNotes(room);
+    const notes = node.querySelector(".room-notes-input");
+    if (notes) {
+      notes.value = room.notes;
+      notes.addEventListener("input", () => {
+        room.notes = notes.value;
+        saveProperty();
+      });
+      notes.addEventListener("click", (e) => e.stopPropagation());
+    }
 
     const removeBtn = node.querySelector(".btn-remove-room");
     removeBtn.addEventListener("click", () => removeRoom(room.id));
@@ -2041,6 +2190,12 @@
       (r) => r.roomType === room.roomType
     ).length;
     if (existingSame > 0) room.name = `${room.roomType} ${existingSame + 1}`;
+    // Seed windows from the most recently entered window data so the
+    // assessor doesn't have to repeat themselves on every room. Falls
+    // back to whatever makeRoom set otherwise.
+    const seed = lastWindowDefaults();
+    if (seed) room.windows = { ...seed };
+    normalizeRoomWindows(room);
     if (!Array.isArray(state.property.rooms)) state.property.rooms = [];
     state.property.rooms.push(room);
     state.expanded.add(room.id);
@@ -2049,6 +2204,29 @@
     saveProperty();
     const el = document.querySelector(`[data-room-id="${room.id}"]`);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  // Pull the seed-windows defaults — first preference is the property's
+  // remembered "last entered" snapshot, second is the most recent room.
+  function lastWindowDefaults() {
+    const meta = state.property && state.property.meta;
+    if (meta && meta.lastWindowDefaults && typeof meta.lastWindowDefaults === "object") {
+      return meta.lastWindowDefaults;
+    }
+    const rooms = (state.property && state.property.rooms) || [];
+    for (let i = rooms.length - 1; i >= 0; i--) {
+      const w = rooms[i] && rooms[i].windows;
+      if (w && typeof w === "object") return w;
+    }
+    return null;
+  }
+
+  function rememberWindowDefaults(windows) {
+    if (!state.property) return;
+    if (!state.property.meta || typeof state.property.meta !== "object") {
+      state.property.meta = {};
+    }
+    state.property.meta.lastWindowDefaults = { ...windows };
   }
 
   function removeRoom(roomId) {
