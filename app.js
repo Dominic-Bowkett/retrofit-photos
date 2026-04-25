@@ -1862,7 +1862,9 @@
     node.querySelectorAll(".room-light-input").forEach((input) => {
       const key = input.dataset.light;
       if (!key || !(key in room.lights)) return;
-      input.value = String(room.lights[key]);
+      // Empty string when zero so the placeholder "0" shows through and
+      // the field doesn't pre-fill a value the assessor has to clear.
+      input.value = room.lights[key] > 0 ? String(room.lights[key]) : "";
       input.addEventListener("input", () => {
         const n = Number(input.value);
         room.lights[key] = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
@@ -1870,8 +1872,8 @@
       });
       input.addEventListener("blur", () => {
         // Snap visible value to the normalised number on blur so "03"
-        // and empty-string both display as "3" / "0".
-        input.value = String(room.lights[key]);
+        // becomes "3" and zero collapses back to a blank field.
+        input.value = room.lights[key] > 0 ? String(room.lights[key]) : "";
       });
       input.addEventListener("click", (e) => e.stopPropagation());
     });
