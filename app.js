@@ -1089,8 +1089,12 @@
     const gap = WINDOW_GAPS.includes(src.gap) ? src.gap : "";
     const frame = WINDOW_FRAMES.includes(src.frame) ? src.frame : "";
     // Drop fields that aren't currently relevant so stale state can't
-    // resurface if the user toggles age / type back later.
-    const effectiveGap = WINDOW_AGES_NEEDING_GAP.has(age) ? gap : "";
+    // resurface if the user toggles age / type back later. Glazing gap
+    // is only meaningful on Double / Triple glazing where the age is
+    // Unknown or Pre 2002 — single glazing has no cavity to measure.
+    const gapAllowed =
+      WINDOW_AGES_NEEDING_GAP.has(age) && WINDOW_TYPES_NEEDING_FRAME.has(type);
+    const effectiveGap = gapAllowed ? gap : "";
     const effectiveFrame = WINDOW_TYPES_NEEDING_FRAME.has(type) ? frame : "";
     const out = { type, age, gap: effectiveGap, frame: effectiveFrame };
     if (
@@ -2090,7 +2094,9 @@
 
       const applyVisibility = () => {
         const showFrame = WINDOW_TYPES_NEEDING_FRAME.has(room.windows.type);
-        const showGap = WINDOW_AGES_NEEDING_GAP.has(room.windows.age);
+        const showGap =
+          WINDOW_AGES_NEEDING_GAP.has(room.windows.age) &&
+          WINDOW_TYPES_NEEDING_FRAME.has(room.windows.type);
         winFrameWrap.hidden = !showFrame;
         winGapWrap.hidden = !showGap;
       };
