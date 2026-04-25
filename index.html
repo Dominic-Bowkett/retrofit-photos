@@ -201,6 +201,21 @@
           </div>
         </header>
         <div class="room-body">
+          <fieldset class="room-lights" aria-label="Lighting count">
+            <legend class="room-lights-legend">Lights</legend>
+            <label class="room-light">
+              <span class="room-light-label">LED</span>
+              <input type="number" class="room-light-input" data-light="led" min="0" step="1" inputmode="numeric" value="0" />
+            </label>
+            <label class="room-light">
+              <span class="room-light-label">CFL</span>
+              <input type="number" class="room-light-input" data-light="cfl" min="0" step="1" inputmode="numeric" value="0" />
+            </label>
+            <label class="room-light">
+              <span class="room-light-label">Incandescent</span>
+              <input type="number" class="room-light-input" data-light="incandescent" min="0" step="1" inputmode="numeric" value="0" />
+            </label>
+          </fieldset>
           <div class="room-photos">
             <div class="thumbs">
               <button type="button" class="thumb thumb-add btn-take-photo-tile" title="Take another photo">

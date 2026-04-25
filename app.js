@@ -1006,7 +1006,28 @@
       roomType: type,
       habitability: DEFAULT_HABITABILITY_BY_TYPE[type] || "Habitable",
       photoIds: [],
+      lights: { led: 0, cfl: 0, incandescent: 0 },
     };
+  }
+
+  const LIGHT_KINDS = [
+    { key: "led", label: "LED" },
+    { key: "cfl", label: "CFL" },
+    { key: "incandescent", label: "Incandescent" },
+  ];
+
+  function normalizeRoomLights(room) {
+    const src = room && typeof room.lights === "object" && room.lights ? room.lights : {};
+    const out = { led: 0, cfl: 0, incandescent: 0 };
+    let changed = !room.lights || typeof room.lights !== "object";
+    for (const { key } of LIGHT_KINDS) {
+      const n = Number(src[key]);
+      const v = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+      out[key] = v;
+      if (src[key] !== v) changed = true;
+    }
+    room.lights = out;
+    return changed;
   }
 
   function migrateRooms(property, photosMap) {
@@ -1065,6 +1086,7 @@
         room.photoIds = [];
         changed = true;
       }
+      if (normalizeRoomLights(room)) changed = true;
       // Catch photos that got the old "Room Photos" tag before this migration.
       if (photosMap) {
         for (const pid of room.photoIds) {
@@ -1834,6 +1856,24 @@
       node.classList.toggle("room-wet", room.habitability === "Wet Room");
       node.classList.toggle("room-nonhab", room.habitability === "Non Habitable");
       saveProperty();
+    });
+
+    normalizeRoomLights(room);
+    node.querySelectorAll(".room-light-input").forEach((input) => {
+      const key = input.dataset.light;
+      if (!key || !(key in room.lights)) return;
+      input.value = String(room.lights[key]);
+      input.addEventListener("input", () => {
+        const n = Number(input.value);
+        room.lights[key] = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+        saveProperty();
+      });
+      input.addEventListener("blur", () => {
+        // Snap visible value to the normalised number on blur so "03"
+        // and empty-string both display as "3" / "0".
+        input.value = String(room.lights[key]);
+      });
+      input.addEventListener("click", (e) => e.stopPropagation());
     });
 
     const removeBtn = node.querySelector(".btn-remove-room");

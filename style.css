@@ -1571,6 +1571,62 @@ input[type="date"]:focus {
   gap: 10px;
 }
 
+.room-lights {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--accent-softer);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: flex-end;
+}
+
+.room-lights-legend {
+  padding: 0 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent-ink);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.room-light {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 90px;
+  min-width: 80px;
+  max-width: 140px;
+}
+
+.room-light-label {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.room-light-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.room-light-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
 /* ---------- Room-tag dropdown on a thumb ---------- */
 .thumb-roomtag {
   /* Fill whatever space the building select leaves in the tagbar. On
