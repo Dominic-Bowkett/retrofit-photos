@@ -1571,7 +1571,7 @@ input[type="date"]:focus {
   gap: 10px;
 }
 
-.room-lights {
+.room-counts {
   margin: 0;
   /* Reset the user-agent fieldset so we can control the layout directly. */
   min-width: 0;
@@ -1579,19 +1579,22 @@ input[type="date"]:focus {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--accent-softer);
-  /* Grid keeps the three inputs on a single row even on narrow phones —
-     on Android Chrome a flex fieldset with a <legend> can promote the
-     legend to a flex item and push the inputs onto two rows. */
+  /* Grid keeps the inputs on a single row even on narrow phones — on
+     Android Chrome a flex fieldset with a <legend> can promote the
+     legend to a flex item and push the last column onto a new row. */
   display: grid;
-  grid-template-columns: repeat(3, max-content);
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
   justify-content: start;
   align-items: end;
   column-gap: 10px;
   row-gap: 0;
 }
 
-.room-lights-legend {
+.room-counts-legend {
+  /* The legend always lives on its own line above the input columns. */
   grid-column: 1 / -1;
+  grid-row: 1;
   padding: 0 6px;
   margin: 0 0 6px;
   font-size: 0.78rem;
@@ -1601,21 +1604,26 @@ input[type="date"]:focus {
   text-transform: uppercase;
 }
 
-.room-light {
+.room-counts > .room-count {
+  /* All inputs share the row below the legend. */
+  grid-row: 2;
+}
+
+.room-count {
   display: flex;
   flex-direction: column;
   gap: 4px;
   flex: 0 0 auto;
 }
 
-.room-light-label {
+.room-count-label {
   font-size: 0.74rem;
   font-weight: 600;
   color: var(--muted);
   white-space: nowrap;
 }
 
-.room-light-input {
+.room-count-input {
   width: 56px;
   padding: 6px 8px;
   border: 1px solid var(--line);
@@ -1632,16 +1640,16 @@ input[type="date"]:focus {
 /* Hide native number-input spinners — the field is too narrow to fit
    them next to a 3-digit value, and the inline "+/-" steppers double
    the visual width on iOS. */
-.room-light-input::-webkit-outer-spin-button,
-.room-light-input::-webkit-inner-spin-button {
+.room-count-input::-webkit-outer-spin-button,
+.room-count-input::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
-.room-light-input {
+.room-count-input {
   -moz-appearance: textfield;
 }
 
-.room-light-input:focus {
+.room-count-input:focus {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
   border-color: var(--accent);

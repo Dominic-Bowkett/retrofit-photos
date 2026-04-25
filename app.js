@@ -1007,6 +1007,7 @@
       habitability: DEFAULT_HABITABILITY_BY_TYPE[type] || "Habitable",
       photoIds: [],
       lights: { led: 0, cfl: 0, incandescent: 0 },
+      chimneys: { open: 0, blocked: 0 },
     };
   }
 
@@ -1016,18 +1017,31 @@
     { key: "incandescent", label: "Incandescent" },
   ];
 
-  function normalizeRoomLights(room) {
-    const src = room && typeof room.lights === "object" && room.lights ? room.lights : {};
-    const out = { led: 0, cfl: 0, incandescent: 0 };
-    let changed = !room.lights || typeof room.lights !== "object";
-    for (const { key } of LIGHT_KINDS) {
+  const CHIMNEY_KINDS = [
+    { key: "open", label: "Open" },
+    { key: "blocked", label: "Blocked" },
+  ];
+
+  function normalizeRoomCounts(room, prop, kinds) {
+    const src = room && typeof room[prop] === "object" && room[prop] ? room[prop] : {};
+    const out = {};
+    let changed = !room[prop] || typeof room[prop] !== "object";
+    for (const { key } of kinds) {
       const n = Number(src[key]);
       const v = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
       out[key] = v;
       if (src[key] !== v) changed = true;
     }
-    room.lights = out;
+    room[prop] = out;
     return changed;
+  }
+
+  function normalizeRoomLights(room) {
+    return normalizeRoomCounts(room, "lights", LIGHT_KINDS);
+  }
+
+  function normalizeRoomChimneys(room) {
+    return normalizeRoomCounts(room, "chimneys", CHIMNEY_KINDS);
   }
 
   function migrateRooms(property, photosMap) {
@@ -1087,6 +1101,7 @@
         changed = true;
       }
       if (normalizeRoomLights(room)) changed = true;
+      if (normalizeRoomChimneys(room)) changed = true;
       // Catch photos that got the old "Room Photos" tag before this migration.
       if (photosMap) {
         for (const pid of room.photoIds) {
@@ -1854,21 +1869,23 @@
     });
 
     normalizeRoomLights(room);
-    node.querySelectorAll(".room-light-input").forEach((input) => {
-      const key = input.dataset.light;
-      if (!key || !(key in room.lights)) return;
-      // Empty string when zero so the placeholder "0" shows through and
-      // the field doesn't pre-fill a value the assessor has to clear.
-      input.value = room.lights[key] > 0 ? String(room.lights[key]) : "";
+    normalizeRoomChimneys(room);
+    // Both the Lights and Chimneys fieldsets render the same kind of
+    // numeric input — wire them up uniformly via data-count="<bucket>"
+    // and data-key="<key>" so the bucket grows by adding HTML alone.
+    node.querySelectorAll(".room-count-input").forEach((input) => {
+      const bucket = input.dataset.count;
+      const key = input.dataset.key;
+      if (!bucket || !key || !room[bucket] || !(key in room[bucket])) return;
+      input.value = room[bucket][key] > 0 ? String(room[bucket][key]) : "";
       input.addEventListener("input", () => {
         const n = Number(input.value);
-        room.lights[key] = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+        room[bucket][key] = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
         saveProperty();
       });
       input.addEventListener("blur", () => {
-        // Snap visible value to the normalised number on blur so "03"
-        // becomes "3" and zero collapses back to a blank field.
-        input.value = room.lights[key] > 0 ? String(room.lights[key]) : "";
+        // Snap "03" to "3" and clear the field when the count is zero.
+        input.value = room[bucket][key] > 0 ? String(room[bucket][key]) : "";
       });
       input.addEventListener("click", (e) => e.stopPropagation());
     });
