@@ -1,20 +1,23 @@
 :root {
-  --bg: #fbf9f4;
+  --bg: #f7f8fa;
   --card: #ffffff;
-  --ink: #14120f;
-  --muted: #6b6158;
-  --line: #ece6d9;
-  --primary: #121212;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --line-soft: #f1f5f9;
+  --primary: #1e293b;
   --primary-ink: #ffffff;
-  --accent: #f59e0b;
-  --accent-ink: #78350f;
-  --accent-soft: #fde7b8;
-  --accent-softer: #fff5df;
-  --accent-border: #f3c97a;
-  --danger: #b22d2d;
-  --warn: #d97706;
+  --accent: #0d9488;
+  --accent-ink: #0f766e;
+  --accent-soft: #ccfbf1;
+  --accent-softer: #f0fdfa;
+  --accent-border: #5eead4;
+  --danger: #dc2626;
+  --danger-soft: #fee2e2;
+  --danger-border: #fca5a5;
+  --warn: #ea580c;
   --radius: 12px;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.08);
 }
 
 * {
@@ -147,7 +150,7 @@ input[type="date"]:focus {
 }
 
 .btn {
-  --btn-bg: #f5efde;
+  --btn-bg: #f1f5f9;
   --btn-ink: var(--ink);
   display: inline-flex;
   align-items: center;
@@ -179,7 +182,7 @@ input[type="date"]:focus {
 
 .btn-primary {
   --btn-bg: var(--accent);
-  --btn-ink: #14120f;
+  --btn-ink: #ffffff;
   border-color: transparent;
   font-weight: 600;
 }
@@ -207,7 +210,7 @@ input[type="date"]:focus {
 }
 
 .btn-upload {
-  --btn-bg: #f5efde;
+  --btn-bg: #f1f5f9;
   --btn-ink: var(--ink);
 }
 
@@ -310,14 +313,14 @@ input[type="date"]:focus {
   color: var(--muted);
   padding: 4px 8px;
   border-radius: 999px;
-  background: #f5efde;
+  background: #f1f5f9;
   min-width: 60px;
   text-align: center;
 }
 
 .save-status.saving {
-  color: #7a5200;
-  background: #fff2d6;
+  color: #0f766e;
+  background: #ecfeff;
 }
 
 .save-status.error {
@@ -334,8 +337,8 @@ input[type="date"]:focus {
 }
 
 .dot.ok {
-  background: #f59e0b;
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25);
+  background: #0d9488;
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.25);
 }
 
 .dot.err {
@@ -362,7 +365,7 @@ input[type="date"]:focus {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding-bottom: 4px;
-  border-bottom: 1px solid #ece6d9;
+  border-bottom: 1px solid #e2e8f0;
   display: flex;
   justify-content: space-between;
   align-items: baseline;
@@ -450,7 +453,7 @@ input[type="date"]:focus {
 
 .group-title:focus {
   outline: 2px solid var(--accent);
-  background: #fffaed;
+  background: #f8fafc;
 }
 
 .group-count {
@@ -520,8 +523,8 @@ input[type="date"]:focus {
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
-  background: #fff5df;
-  border-bottom: 1px solid #f3c97a;
+  background: #f0fdfa;
+  border-bottom: 1px solid #5eead4;
 }
 
 .thumb-building {
@@ -530,7 +533,7 @@ input[type="date"]:focus {
   font: inherit;
   font-size: 0.75rem;
   font-weight: 700;
-  border: 1px solid #f3c97a;
+  border: 1px solid #5eead4;
   border-radius: 6px;
   background: #fff;
   color: var(--primary);
@@ -595,8 +598,8 @@ input[type="date"]:focus {
 
 .thumb-add {
   margin: 0;
-  background: #fffaed;
-  border: 2px dashed #f3c97a;
+  background: #f8fafc;
+  border: 2px dashed #5eead4;
   border-radius: 10px;
   aspect-ratio: 4 / 3;
   display: flex;
@@ -635,7 +638,7 @@ input[type="date"]:focus {
 .view-toggle {
   display: inline-flex;
   align-self: flex-start;
-  background: #f5efde;
+  background: #f1f5f9;
   padding: 3px;
   border-radius: 10px;
   border: 1px solid var(--line);
@@ -666,10 +669,10 @@ input[type="date"]:focus {
   position: fixed;
   inset: 0;
   z-index: 110;
-  background: rgba(14, 14, 14, 0.96);
+  background: #f7f8fa;
   display: flex;
   flex-direction: column;
-  color: #fff;
+  color: var(--ink);
   /* Stop vertical drags inside the overlay from bubbling through to the
      document underneath (iOS rubber-band). */
   overscroll-behavior: contain;
@@ -685,7 +688,8 @@ input[type="date"]:focus {
   gap: 12px;
   padding: 10px 14px;
   padding-top: calc(10px + env(safe-area-inset-top));
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #ffffff;
+  border-bottom: 1px solid var(--line);
   flex-wrap: wrap;
 }
 
@@ -698,21 +702,21 @@ input[type="date"]:focus {
   width: 100%;
   padding: 8px 12px;
   font: inherit;
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--line);
   border-radius: 8px;
   max-width: 100%;
 }
 
 .lightbox-filter-wrap select option {
-  color: #111;
+  color: var(--ink);
   background: #fff;
 }
 
 .lightbox-counter {
   font-size: 0.82rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--muted);
   white-space: nowrap;
 }
 
@@ -727,8 +731,8 @@ input[type="date"]:focus {
   /* 16 px matches .lightbox-stage horizontal padding so the input's
      visual edges line up with the image below. */
   padding: 10px 16px;
-  background: rgba(0, 0, 0, 0.35);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #ffffff;
+  border-bottom: 1px solid var(--line);
 }
 
 .lightbox-label-input {
@@ -738,14 +742,14 @@ input[type="date"]:focus {
   font: inherit;
   font-size: 0.95rem;
   font-weight: 600;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--line);
   border-radius: 8px;
 }
 
 .lightbox-label-input::placeholder {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--muted);
   font-weight: 500;
 }
 
@@ -763,6 +767,7 @@ input[type="date"]:focus {
   align-items: center;
   justify-content: center;
   padding: 16px;
+  background: #f1f5f9;
   /* Own every touch gesture so swipe / pinch / pan behave consistently on
      iOS — the browser won't try to pinch-zoom the whole page. */
   touch-action: none;
@@ -773,8 +778,9 @@ input[type="date"]:focus {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  background: #000;
-  box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+  background: #ffffff;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.18);
+  border-radius: 6px;
   transform-origin: center center;
   transition: transform 0.22s ease;
   will-change: transform;
@@ -785,13 +791,11 @@ input[type="date"]:focus {
 .lightbox-stage.is-manipulating img {
   transition: none;
 }
-  border-radius: 4px;
-}
 
 .lightbox-btn {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--line);
   font-size: 1.6rem;
   width: 44px;
   height: 44px;
@@ -799,13 +803,14 @@ input[type="date"]:focus {
   display: grid;
   place-items: center;
   cursor: pointer;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  box-shadow: var(--shadow);
   flex: 0 0 auto;
 }
 
 .lightbox-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--accent-softer);
+  border-color: var(--accent-border);
+  color: var(--accent-ink);
 }
 
 .lightbox-btn:disabled {
@@ -835,8 +840,8 @@ input[type="date"]:focus {
 
 .lightbox-footer {
   padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.4);
+  border-top: 1px solid var(--line);
+  background: #ffffff;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -844,7 +849,7 @@ input[type="date"]:focus {
 
 .lightbox-caption {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--muted);
   text-align: center;
   min-height: 1.2em;
 }
@@ -862,7 +867,7 @@ input[type="date"]:focus {
   flex-direction: column;
   gap: 4px;
   font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--muted);
   flex: 1 1 120px;
   min-width: 100px;
   max-width: 220px;
@@ -872,19 +877,19 @@ input[type="date"]:focus {
 .lightbox-control select {
   padding: 8px 10px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--ink);
   font: inherit;
   font-size: 0.88rem;
 }
 
 .lightbox-control input::placeholder {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--muted);
 }
 
 .lightbox-control select option {
-  color: #111;
+  color: var(--ink);
   background: #fff;
 }
 
@@ -894,9 +899,9 @@ input[type="date"]:focus {
   gap: 6px;
   padding: 8px 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--line);
   font: inherit;
   font-size: 0.82rem;
   font-weight: 600;
@@ -905,30 +910,30 @@ input[type="date"]:focus {
 
 .lightbox-chip[aria-pressed="true"],
 .lightbox-chip.is-on {
-  background: rgba(178, 45, 45, 0.18);
-  color: #ffd1d1;
-  border-color: rgba(255, 120, 120, 0.5);
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: var(--danger-border);
 }
 
 .lightbox-chip-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--line);
 }
 
 .lightbox-chip[aria-pressed="true"] .lightbox-chip-dot,
 .lightbox-chip.is-on .lightbox-chip-dot {
-  background: #ff6b6b;
-  box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.3);
+  background: var(--danger);
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
 }
 
 .lightbox-danger {
   padding: 8px 14px;
   border-radius: 8px;
-  background: rgba(178, 45, 45, 0.22);
-  color: #ffd7d7;
-  border: 1px solid rgba(255, 120, 120, 0.4);
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
   font: inherit;
   font-size: 0.85rem;
   font-weight: 600;
@@ -936,7 +941,7 @@ input[type="date"]:focus {
 }
 
 .lightbox-danger:hover {
-  background: rgba(178, 45, 45, 0.35);
+  background: #fecaca;
 }
 
 @media (min-width: 720px) {
@@ -997,7 +1002,7 @@ input[type="date"]:focus {
 .dialog-card .dialog-help {
   font-size: 0.78rem;
   color: var(--muted);
-  background: #fffaed;
+  background: #f8fafc;
   padding: 10px 12px;
   border-radius: 8px;
 }
@@ -1161,9 +1166,9 @@ input[type="date"]:focus {
 }
 
 #camera-torch.is-on {
-  background: #ffcd3a;
-  color: #2a1c00;
-  border-color: #e3b73a;
+  background: #14b8a6;
+  color: #0f172a;
+  border-color: #14b8a6;
   box-shadow: 0 0 14px rgba(255, 205, 58, 0.55);
 }
 
@@ -1292,8 +1297,8 @@ input[type="date"]:focus {
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%) translateY(20px);
-  background: #111;
-  color: #fff;
+  background: var(--primary);
+  color: var(--primary-ink);
   padding: 10px 14px;
   border-radius: 10px;
   font-size: 0.9rem;
@@ -1422,7 +1427,7 @@ input[type="date"]:focus {
   padding: 14px;
   border-radius: 10px;
   border: 1px dashed var(--line);
-  background: #fffaed;
+  background: #f8fafc;
   color: var(--muted);
   font-size: 0.9rem;
   text-align: center;
@@ -1445,7 +1450,7 @@ input[type="date"]:focus {
 }
 
 .room {
-  border-left: 4px solid #f3c97a;
+  border-left: 4px solid #5eead4;
   transition: border-color 0.15s ease;
 }
 
@@ -1510,19 +1515,19 @@ input[type="date"]:focus {
 }
 
 .room-title-input::placeholder {
-  color: #b09580;
+  color: #94a3b8;
   font-weight: 500;
 }
 
 .room-title-input:hover {
-  border-color: #f3c97a;
+  border-color: #5eead4;
 }
 
 .room-title-input:focus {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
   border-color: var(--accent);
-  background: #fffaed;
+  background: #f8fafc;
 }
 
 .room-count {
@@ -1552,11 +1557,11 @@ input[type="date"]:focus {
 }
 
 .room.room-wet .room-habitability {
-  color: #5f83a8;
+  color: #0284c7;
 }
 
 .room.room-nonhab .room-habitability {
-  color: #7a5200;
+  color: #0f766e;
 }
 
 .room-body {
@@ -1577,7 +1582,7 @@ input[type="date"]:focus {
   font: inherit;
   font-size: 0.72rem;
   font-weight: 600;
-  border: 1px solid #f3c97a;
+  border: 1px solid #5eead4;
   border-radius: 6px;
   background: #fff;
   color: var(--primary);
@@ -1598,7 +1603,7 @@ input[type="date"]:focus {
 }
 
 .thumb-roomtag[value=""]:not(:focus) {
-  color: #b09580;
+  color: #94a3b8;
   font-weight: 500;
 }
 
@@ -1615,7 +1620,7 @@ input[type="date"]:focus {
   font-weight: 600;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #f5efde;
+  background: #f1f5f9;
   color: var(--muted);
   cursor: pointer;
   justify-content: center;
@@ -1629,7 +1634,7 @@ input[type="date"]:focus {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #ddd3c3;
+  background: #cbd5e1;
   display: inline-block;
 }
 
@@ -1693,7 +1698,7 @@ body.view-analysis .add-room-row {
   padding: 18px;
   border-radius: 12px;
   border: 1px dashed var(--line);
-  background: #fffaed;
+  background: #f8fafc;
   color: var(--muted);
   font-size: 0.92rem;
   text-align: center;
@@ -1750,7 +1755,7 @@ body.view-analysis .add-room-row {
 }
 
 .dialog-card code {
-  background: #f5efde;
+  background: #f1f5f9;
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 0.85em;
@@ -1762,7 +1767,7 @@ body.view-analysis .add-room-row {
   gap: 8px;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--line);
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
@@ -1774,14 +1779,14 @@ body.view-analysis .add-room-row {
   padding: 8px 10px;
   font: inherit;
   font-size: 0.88rem;
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--line);
   border-radius: 8px;
 }
 
 .lightbox-analyse-row select option {
-  color: #111;
+  color: var(--ink);
   background: #fff;
 }
 
@@ -1789,7 +1794,7 @@ body.view-analysis .add-room-row {
   padding: 8px 14px;
   border-radius: 8px;
   background: var(--accent);
-  color: #14120f;
+  color: #ffffff;
   border: 1px solid var(--accent);
   font: inherit;
   font-size: 0.85rem;
@@ -1816,25 +1821,25 @@ body.view-analysis .add-room-row {
 }
 
 .analysis-card {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #ffffff;
+  border: 1px solid var(--line);
   border-left: 3px solid var(--accent);
   border-radius: 8px;
   padding: 10px 12px;
-  color: #e2ddd3;
+  color: var(--ink);
   font-size: 0.85rem;
 }
 
 .analysis-card.analysis-conf-low {
-  border-left-color: #d97706;
+  border-left-color: var(--warn);
 }
 
 .analysis-card.analysis-conf-medium {
-  border-left-color: #facc15;
+  border-left-color: #eab308;
 }
 
 .analysis-card.analysis-conf-high {
-  border-left-color: #f59e0b;
+  border-left-color: var(--accent);
 }
 
 .analysis-head {
@@ -1847,13 +1852,13 @@ body.view-analysis .add-room-row {
 
 .analysis-title {
   font-weight: 700;
-  color: #f59e0b;
+  color: var(--accent-ink);
   font-size: 0.92rem;
 }
 
 .analysis-sub {
   font-size: 0.74rem;
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--muted);
 }
 
 .analysis-chip {
@@ -1863,30 +1868,30 @@ body.view-analysis .add-room-row {
   font-weight: 700;
   letter-spacing: 0.3px;
   text-transform: uppercase;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--line-soft);
+  color: var(--muted);
 }
 
 .analysis-chip-high {
-  background: rgba(245, 158, 11, 0.2);
-  color: #f8c464;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
 }
 
 .analysis-chip-medium {
-  background: rgba(250, 204, 21, 0.18);
-  color: #facc15;
+  background: #fef3c7;
+  color: #a16207;
 }
 
 .analysis-chip-low {
-  background: rgba(217, 119, 6, 0.25);
-  color: #f5b061;
+  background: #ffedd5;
+  color: #9a3412;
 }
 
 .analysis-remove {
   margin-left: auto;
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--muted);
   font-size: 1.2rem;
   line-height: 1;
   cursor: pointer;
@@ -1894,7 +1899,7 @@ body.view-analysis .add-room-row {
 }
 
 .analysis-remove:hover {
-  color: #ff6b6b;
+  color: var(--danger);
 }
 
 .analysis-fields {
@@ -1906,19 +1911,19 @@ body.view-analysis .add-room-row {
 }
 
 .analysis-fields dt {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--muted);
   font-weight: 500;
 }
 
 .analysis-fields dd {
   margin: 0;
-  color: #fff;
+  color: var(--ink);
 }
 
 .analysis-notes {
   margin: 6px 0 0;
   font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--muted);
   line-height: 1.35;
 }
 
@@ -1948,11 +1953,9 @@ body.view-analysis .add-room-row {
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  background: rgba(18, 18, 18, 0.82);
-  color: var(--accent);
-  border: 1px solid rgba(245, 158, 11, 0.55);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border: 1px solid var(--accent-border);
 }
 
 .thumb {
@@ -1981,7 +1984,7 @@ body.view-analysis .add-room-row {
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fffaed;
+  background: #f8fafc;
 }
 
 .analysis-list-thumb {
@@ -2025,39 +2028,6 @@ body.view-analysis .add-room-row {
   margin-left: auto;
 }
 
-/* Re-style analysis cards when they render on the light Analysis page
-   (the lightbox versions live on a dark background). */
-.analysis-list-body .analysis-card {
-  background: #fff;
-  border-color: var(--line);
-  color: var(--ink);
-}
-
-.analysis-list-body .analysis-title {
-  color: var(--accent-ink);
-}
-
-.analysis-list-body .analysis-sub {
-  color: var(--muted);
-}
-
-.analysis-list-body .analysis-fields dt {
-  color: var(--muted);
-}
-
-.analysis-list-body .analysis-fields dd,
-.analysis-list-body .analysis-notes {
-  color: var(--ink);
-}
-
-.analysis-list-body .analysis-remove {
-  color: var(--muted);
-}
-
-.analysis-list-body .analysis-remove:hover {
-  color: var(--danger);
-}
-
 @media (max-width: 520px) {
   .analysis-list-item {
     grid-template-columns: 88px 1fr;
@@ -2078,7 +2048,7 @@ body.view-analysis .add-room-row {
   min-height: 40px;
   border-radius: 8px;
   background: var(--accent);
-  color: #14120f;
+  color: #ffffff;
   border: 1px solid var(--accent);
   font: inherit;
   font-size: 0.85rem;
