@@ -1893,6 +1893,44 @@ input[type="date"]:focus {
   border-color: var(--accent);
 }
 
+.room-windows-orient-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.room-windows-orient-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.room-windows-compass {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.room-windows-compass:hover {
+  background: var(--accent-softer);
+  border-color: var(--accent-border);
+  color: var(--accent-ink);
+}
+
+.room-windows-compass:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
 .room-windows-frame-wrap[hidden],
 .room-windows-gap-wrap[hidden] {
   display: none;

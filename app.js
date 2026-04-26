@@ -2122,6 +2122,83 @@
   // The fieldset owns its own change listeners so callers don't need
   // to know the schema; it asks the surrounding stack to re-render
   // (via stack.__rerender) only when add/remove changes the count.
+  // -------------------- Compass (device orientation) --------------------
+  // Read a single compass heading (0-360, clockwise from magnetic North)
+  // from the device's magnetometer. iOS Safari requires permission via
+  // DeviceOrientationEvent.requestPermission(); Android Chrome doesn't,
+  // but only the absolute orientation event gives a stable bearing.
+  function readCompassHeading(opts) {
+    const timeoutMs = (opts && opts.timeoutMs) || 4000;
+    return new Promise((resolve, reject) => {
+      if (typeof DeviceOrientationEvent === "undefined") {
+        reject(new Error("This device doesn't expose a compass."));
+        return;
+      }
+
+      const start = (eventName) => {
+        let settled = false;
+        const finish = (h, err) => {
+          if (settled) return;
+          settled = true;
+          window.removeEventListener(eventName, onEvent, true);
+          clearTimeout(timer);
+          if (err) reject(err);
+          else resolve(h);
+        };
+        const onEvent = (e) => {
+          let heading = null;
+          // iOS Safari — degrees from magnetic north, clockwise.
+          if (typeof e.webkitCompassHeading === "number") {
+            heading = e.webkitCompassHeading;
+          } else if (e.absolute && typeof e.alpha === "number") {
+            // Android: alpha is rotation around Z, anti-clockwise from
+            // North. Compass heading = (360 - alpha) mod 360.
+            heading = (360 - e.alpha) % 360;
+          }
+          if (heading == null || Number.isNaN(heading)) return;
+          finish(((heading % 360) + 360) % 360);
+        };
+        window.addEventListener(eventName, onEvent, true);
+        const timer = setTimeout(() => {
+          finish(null, new Error("No compass reading. Move the phone in a figure-of-eight to calibrate, then try again."));
+        }, timeoutMs);
+      };
+
+      const begin = () => {
+        // Prefer the absolute event where it exists (Android), fall
+        // back to the regular orientation event (iOS exposes
+        // webkitCompassHeading on it).
+        if ("ondeviceorientationabsolute" in window) {
+          start("deviceorientationabsolute");
+        } else {
+          start("deviceorientation");
+        }
+      };
+
+      // iOS 13+ requires explicit permission for orientation events.
+      if (typeof DeviceOrientationEvent.requestPermission === "function") {
+        DeviceOrientationEvent.requestPermission()
+          .then((response) => {
+            if (response === "granted") begin();
+            else reject(new Error("Compass permission denied."));
+          })
+          .catch((err) => reject(err));
+      } else {
+        begin();
+      }
+    });
+  }
+
+  // Snap a 0-360 heading to the nearest of the 8 compass points.
+  function compassHeadingToOrientation(heading) {
+    const POINTS = [
+      "North", "North East", "East", "South East",
+      "South", "South West", "West", "North West",
+    ];
+    const idx = Math.round(((heading % 360) + 360) % 360 / 45) % 8;
+    return POINTS[idx];
+  }
+
   function buildWindowFieldset(room, win, idx) {
     const tpl = document.getElementById("room-window-template");
     const node = tpl.content.firstElementChild.cloneNode(true);
@@ -2259,6 +2336,32 @@
       saveProperty();
     });
     winOrient.addEventListener("click", (e) => e.stopPropagation());
+
+    const compassBtn = node.querySelector(".room-windows-compass");
+    if (compassBtn) {
+      compassBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        compassBtn.disabled = true;
+        const originalLabel = compassBtn.innerHTML;
+        compassBtn.innerHTML = '<span aria-hidden="true">⏳</span>';
+        try {
+          const heading = await readCompassHeading();
+          const point = compassHeadingToOrientation(heading);
+          win.orientation = point;
+          winOrient.value = point;
+          normalizeOneWindow(win);
+          saveProperty();
+          toast(`Orientation set to ${point} (${Math.round(heading)}°).`);
+        } catch (err) {
+          console.warn("compass read failed", err);
+          toast(err && err.message ? err.message : "Couldn't read the compass.", "err");
+        } finally {
+          compassBtn.disabled = false;
+          compassBtn.innerHTML = originalLabel;
+        }
+      });
+    }
+
     winGapBtns.forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();

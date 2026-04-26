@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="stylesheet" href="style.css?v=20" />
+    <link rel="stylesheet" href="style.css?v=21" />
   </head>
   <body>
     <header class="app-header">
@@ -355,10 +355,15 @@
             <span class="room-windows-label">Age</span>
             <select class="room-windows-age" aria-label="Window age"></select>
           </label>
-          <label class="room-windows-field">
+          <div class="room-windows-field room-windows-orient-wrap">
             <span class="room-windows-label">Orientation</span>
-            <select class="room-windows-orientation" aria-label="Orientation"></select>
-          </label>
+            <div class="room-windows-orient-row">
+              <select class="room-windows-orientation" aria-label="Orientation"></select>
+              <button type="button" class="room-windows-compass" title="Set orientation from the phone's compass — face the window with the back of the phone">
+                <span aria-hidden="true">📍</span>
+              </button>
+            </div>
+          </div>
           <label class="room-windows-field room-windows-frame-wrap">
             <span class="room-windows-label">Frame</span>
             <select class="room-windows-frame" aria-label="Frame type"></select>
@@ -597,6 +602,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
-    <script src="app.js?v=20"></script>
+    <script src="app.js?v=21"></script>
   </body>
 </html>
