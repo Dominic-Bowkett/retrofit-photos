@@ -4576,7 +4576,6 @@
   const WINDOW_SCHEDULE_COLUMNS = [
     { key: "no", label: "No." },
     { key: "room", label: "Room" },
-    { key: "habitability", label: "Habitability" },
     { key: "windowLabel", label: "Window" },
     { key: "type", label: "Type" },
     { key: "age", label: "Age" },
@@ -5085,9 +5084,9 @@ td:empty::before,td.empty{color:#94a3b8;content:"—"}
       const tableLeft = margin;
       const tableRight = pageW - margin;
       const tableW = tableRight - tableLeft;
-      // Weights for: No. | Room | Habitability | Window | Type | Age |
-      //              Orientation | Frame | Gap | Width | Height.
-      const colWeights = [0.7, 2.2, 1.4, 1.1, 1.1, 1.4, 1.5, 1.2, 1.2, 1.4, 1.4];
+      // Weights for: No. | Room | Window | Type | Age | Orientation |
+      //              Frame | Gap | Width | Height.
+      const colWeights = [0.7, 2.4, 1.2, 1.2, 1.4, 1.7, 1.3, 1.3, 1.5, 1.5];
       const totalWeight = colWeights.reduce((a, b) => a + b, 0);
       const colWidths = colWeights.map((w) => (w / totalWeight) * tableW);
       const colX = [tableLeft];
