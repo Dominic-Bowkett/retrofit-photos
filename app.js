@@ -313,8 +313,10 @@
         "- role_hint: a short description of where on the screen the number appears, e.g. " +
         "\"main display\", \"history line 1\", \"history line 2\", \"min\", \"max\", \"sum\", \"area\", \"volume\". null if unclear.\n" +
         "- confidence: high / medium / low for THIS reading.\n\n" +
-        "Return them in display order — the largest / main reading first, then any history / sub-readings. " +
-        "Set primary_index to the index of the most prominent reading (0-based) or null if ambiguous. " +
+        "ORDERING IS IMPORTANT: return the readings in the order they appear on the screen FROM TOP TO BOTTOM. " +
+        "Most laser measurers stack older / sub-readings above the main reading, with the most recent / largest " +
+        "value at the bottom — preserve that visual order in the array. Set primary_index to the index of the " +
+        "most prominent reading (0-based) or null if ambiguous. " +
         "Use the notes field for anything that affects interpretation (glare, partial occlusion, mode like \"Pythagoras\", " +
         "device make/model if obvious). DO NOT invent readings — if the screen isn't legible, return an empty measurements array.",
       userPrompt:
@@ -3991,7 +3993,8 @@
     }
 
     // Convert each reading to metres so we can compare like-for-like
-    // even if the laser is mixing m / cm / mm.
+    // even if the laser is mixing m / cm / mm. The model returns
+    // readings in screen order, top to bottom.
     const TO_METRES = { m: 1, cm: 0.01, mm: 0.001 };
     const valued = measurements
       .map((m) => {
@@ -4005,11 +4008,17 @@
       return;
     }
 
+    // Fallback rule: when the laser screen is showing 3 or more
+    // readings, drop the TOP one (it's typically a stale history line
+    // or a sum/area/total) and only consider the remaining readings.
+    // For two or fewer readings, use them all.
+    const candidates = valued.length >= 3 ? valued.slice(1) : valued.slice();
+
     // Width = longest reading, Height = shortest. Single-reading
     // captures fill Width only and leave Height untouched.
-    let smallest = valued[0];
-    let largest = valued[0];
-    for (const v of valued) {
+    let smallest = candidates[0];
+    let largest = candidates[0];
+    for (const v of candidates) {
       if (v.valueM < smallest.valueM) smallest = v;
       if (v.valueM > largest.valueM) largest = v;
     }
