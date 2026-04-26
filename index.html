@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="stylesheet" href="style.css?v=26" />
+    <link rel="stylesheet" href="style.css?v=27" />
   </head>
   <body>
     <header class="app-header">
@@ -474,6 +474,10 @@
           <input type="checkbox" id="pdf-include-analysis" checked />
           <span>Include AI analysis captions</span>
         </label>
+        <label class="dialog-toggle" id="pdf-share-toggle-wrap" hidden>
+          <input type="checkbox" id="pdf-share" />
+          <span>Share via system (Save to Drive / Files)</span>
+        </label>
         <div class="dialog-actions">
           <button class="btn btn-primary" id="pdf-layout-group" type="button">By group</button>
           <button class="btn" id="pdf-layout-tag" type="button">By Tag</button>
@@ -485,6 +489,9 @@
           tag (Room, Meters, Windows, etc.), then any untagged photos in an
           "Untagged" section at the end.
           Untick <em>Include AI analysis captions</em> for a plain-evidence PDF.
+          Tick <em>Share via system</em> to push the PDF straight to Drive,
+          Files, or any installed app via the OS share sheet — handy on iOS
+          where direct downloads can be unreliable for large files.
         </p>
         <button class="btn btn-ghost-dark" id="pdf-layout-cancel" type="button">Cancel</button>
       </div>
@@ -562,6 +569,10 @@
           metadata are preserved in both options — stamped camera captures and
           uploaded photos both retain their EXIF data.
         </p>
+        <label class="dialog-toggle" id="export-share-toggle-wrap" hidden>
+          <input type="checkbox" id="export-share" />
+          <span>Share each ZIP via system (Save to Drive / Files)</span>
+        </label>
         <div class="dialog-actions">
           <button class="btn btn-primary" id="export-photos-share" type="button">Save to Photos</button>
           <button class="btn" id="export-photos-zip" type="button">Download ZIP (compressed)</button>
@@ -575,9 +586,11 @@
           large jobs still fit within iOS in-app memory.
           <strong>Download ZIP (originals)</strong> keeps every photo at
           capture quality. Very large jobs are split automatically into
-          parts of up to 100 photos so each archive stays inside iOS
-          in-app memory — you'll get one download per part. The ↓ button
-          on any thumbnail always saves a single photo at full fidelity.
+          parts so each archive stays inside iOS in-app memory.
+          Tick <em>Share each ZIP via system</em> to send the archives straight
+          to Drive, Files, or any installed app via the OS share sheet
+          (recommended on iPhone PWA — much more reliable than direct downloads).
+          The ↓ button on any thumbnail always saves a single photo at full fidelity.
         </p>
         <button class="btn btn-ghost-dark" id="export-photos-cancel" type="button">Cancel</button>
       </div>
@@ -612,6 +625,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
-    <script src="app.js?v=26"></script>
+    <script src="app.js?v=27"></script>
   </body>
 </html>

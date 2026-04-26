@@ -499,6 +499,10 @@
     pdfLayoutGroupBtn: document.getElementById("pdf-layout-group"),
     pdfLayoutTagBtn: document.getElementById("pdf-layout-tag"),
     pdfIncludeAnalysis: document.getElementById("pdf-include-analysis"),
+    pdfShare: document.getElementById("pdf-share"),
+    pdfShareToggleWrap: document.getElementById("pdf-share-toggle-wrap"),
+    exportShare: document.getElementById("export-share"),
+    exportShareToggleWrap: document.getElementById("export-share-toggle-wrap"),
     pdfLayoutCancelBtn: document.getElementById("pdf-layout-cancel"),
     viewToggleBtns: Array.from(document.querySelectorAll(".view-toggle-btn")),
     lightbox: document.getElementById("lightbox"),
@@ -4061,6 +4065,47 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  // Probe whether the device supports sharing files via the OS share
+  // sheet (iOS Safari 16.4+, Android Chrome). Cached at boot so the
+  // dialogs can default the share toggle accordingly.
+  function canShareFiles() {
+    if (typeof navigator === "undefined") return false;
+    if (typeof navigator.canShare !== "function") return false;
+    try {
+      const probe = new File([new Blob(["x"])], "probe.txt", { type: "text/plain" });
+      return navigator.canShare({ files: [probe] });
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Share if requested and supported, otherwise fall back to a regular
+  // download. Returns a string describing what happened so callers can
+  // tailor toast messages.
+  async function deliverBlob(blob, filename, opts) {
+    const wantsShare = opts && opts.share;
+    if (wantsShare && typeof navigator.canShare === "function") {
+      const file = new File([blob], filename, {
+        type: blob.type || "application/octet-stream",
+      });
+      if (navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: (opts && opts.title) || filename,
+            text: (opts && opts.text) || "",
+          });
+          return "shared";
+        } catch (err) {
+          if (err && err.name === "AbortError") return "cancelled";
+          console.warn("share failed, falling back to download", err);
+        }
+      }
+    }
+    saveBlob(blob, filename);
+    return "downloaded";
+  }
+
   // -------------------- AI photo analysis --------------------
   function getClaudeApiKey() {
     try {
@@ -5380,6 +5425,7 @@ td:empty::before,td.empty{color:#94a3b8;content:"—"}
   async function exportPdf(opts) {
     const layout = (opts && opts.layout) || "group";
     const includeAnalysis = opts ? opts.includeAnalysis !== false : true;
+    const share = !!(opts && opts.share);
     try {
       const built = await buildPdf({ layout, includeAnalysis });
       // Differentiate the filename so the user can tell at a glance which
@@ -5388,11 +5434,21 @@ td:empty::before,td.empty{color:#94a3b8;content:"—"}
       let filename = built.filename;
       if (!includeAnalysis) filename = filename.replace(/\.pdf$/, "_no-ai.pdf");
       if (layout === "tag") filename = filename.replace(/\.pdf$/, "_by-tag.pdf");
-      built.doc.save(filename);
-      toast(
-        `PDF saved (${layout === "tag" ? "by tag" : "by group"}, ` +
-          `${includeAnalysis ? "AI analysis included" : "AI analysis skipped"}).`
-      );
+      const blob = built.doc.output("blob");
+      const result = await deliverBlob(blob, filename, {
+        share,
+        title: filename,
+        text: `Photo evidence — ${state.property.name || ""}`.trim(),
+      });
+      const layoutLabel = layout === "tag" ? "by tag" : "by group";
+      const aiLabel = includeAnalysis ? "AI analysis included" : "AI analysis skipped";
+      if (result === "shared") {
+        toast(`PDF shared (${layoutLabel}, ${aiLabel}).`);
+      } else if (result === "cancelled") {
+        toast("Share cancelled.");
+      } else {
+        toast(`PDF saved (${layoutLabel}, ${aiLabel}).`);
+      }
     } catch (err) {
       console.error(err);
       toast(err.message || "Failed to build PDF.", "err");
@@ -6155,6 +6211,7 @@ ${nojsFallback}
     //   into multiple ZIPs of at most ORIGINALS_CHUNK photos so iOS
     //   doesn't blow its memory ceiling on a single huge archive.
     const compress = options.compress !== false;
+    const share = !!options.share;
     // iOS WebKit (and especially the standalone PWA process) gets a
     // much smaller memory ceiling than desktop Safari. Chunk size is
     // the main lever — every photo we add to a chunk holds ~2-5 MB
@@ -6308,7 +6365,13 @@ ${nojsFallback}
         } else {
           suffix = "_photos_originals.zip";
         }
-        saveBlob(zipBlob, `${reportBaseName()}${suffix}`);
+        const filename = `${reportBaseName()}${suffix}`;
+        const partTitle = numParts > 1 ? `${filename} (part ${partIdx + 1}/${numParts})` : filename;
+        const result = await deliverBlob(zipBlob, filename, {
+          share,
+          title: partTitle,
+          text: `Retrofit Photos — ${state.property.name || ""}`.trim(),
+        });
         // Drop our refs so the browser can reclaim ~2 × chunk size of
         // memory before the next chunk starts building. On iOS PWA
         // this single line is the difference between "completes" and
@@ -6318,14 +6381,15 @@ ${nojsFallback}
         // can drop subsequent anchor clicks if they come back-to-back,
         // and a longer pause gives WebKit room to actually GC.
         if (partIdx < numParts - 1) {
-          toast(`Part ${partIdx + 1}/${numParts} saved — starting next part…`);
+          const verb = result === "shared" ? "shared" : "saved";
+          toast(`Part ${partIdx + 1}/${numParts} ${verb} — starting next part…`);
           await new Promise((r) => setTimeout(r, interPartPauseMs));
         }
       }
       toast(
         numParts > 1
-          ? `All ${numParts} parts saved.`
-          : "Photos ZIP saved."
+          ? `All ${numParts} parts ${share ? "shared" : "saved"}.`
+          : `Photos ZIP ${share ? "shared" : "saved"}.`
       );
     } catch (err) {
       console.error(err);
@@ -6764,15 +6828,27 @@ ${nojsFallback}
   els.pdfLayoutBackdrop.addEventListener("click", closePdfLayoutDialog);
   const pdfIncludeAnalysis = () =>
     !els.pdfIncludeAnalysis || els.pdfIncludeAnalysis.checked;
+  const pdfShareWanted = () =>
+    !!(els.pdfShare && !els.pdfShare.disabled && els.pdfShare.checked);
+  // Reveal the share toggle on devices that can actually share files,
+  // and default it on for iOS / Android where it's the friendlier path.
+  if (canShareFiles() && els.pdfShareToggleWrap && els.pdfShare) {
+    els.pdfShareToggleWrap.hidden = false;
+    const isMobile = /iPad|iPhone|iPod|Android/.test(navigator.userAgent || "") ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    els.pdfShare.checked = isMobile;
+  }
   els.pdfLayoutGroupBtn.addEventListener("click", () => {
     const includeAnalysis = pdfIncludeAnalysis();
+    const share = pdfShareWanted();
     closePdfLayoutDialog();
-    exportPdf({ layout: "group", includeAnalysis });
+    exportPdf({ layout: "group", includeAnalysis, share });
   });
   els.pdfLayoutTagBtn.addEventListener("click", () => {
     const includeAnalysis = pdfIncludeAnalysis();
+    const share = pdfShareWanted();
     closePdfLayoutDialog();
-    exportPdf({ layout: "tag", includeAnalysis });
+    exportPdf({ layout: "tag", includeAnalysis, share });
   });
   document.addEventListener("keydown", (e) => {
     if (!els.pdfLayoutDialog.hidden && e.key === "Escape") {
@@ -6787,19 +6863,29 @@ ${nojsFallback}
   });
   els.exportPhotosCancelBtn.addEventListener("click", closeExportPhotosDialog);
   els.exportPhotosBackdrop.addEventListener("click", closeExportPhotosDialog);
+  const exportShareWanted = () =>
+    !!(els.exportShare && !els.exportShare.disabled && els.exportShare.checked);
+  if (canShareFiles() && els.exportShareToggleWrap && els.exportShare) {
+    els.exportShareToggleWrap.hidden = false;
+    const isMobile = /iPad|iPhone|iPod|Android/.test(navigator.userAgent || "") ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    els.exportShare.checked = isMobile;
+  }
   els.exportPhotosShareBtn.addEventListener("click", () => {
     // Keep synchronous up to navigator.share() so iOS grants the gesture.
     closeExportPhotosDialog();
     exportPhotosShareNow();
   });
   els.exportPhotosZipBtn.addEventListener("click", () => {
+    const share = exportShareWanted();
     closeExportPhotosDialog();
-    exportPhotosAsZip({ compress: true });
+    exportPhotosAsZip({ compress: true, share });
   });
   if (els.exportPhotosZipOriginalBtn) {
     els.exportPhotosZipOriginalBtn.addEventListener("click", () => {
+      const share = exportShareWanted();
       closeExportPhotosDialog();
-      exportPhotosAsZip({ compress: false });
+      exportPhotosAsZip({ compress: false, share });
     });
   }
   document.addEventListener("keydown", (e) => {
