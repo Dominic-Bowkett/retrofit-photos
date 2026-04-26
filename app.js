@@ -6155,7 +6155,18 @@ ${nojsFallback}
     //   into multiple ZIPs of at most ORIGINALS_CHUNK photos so iOS
     //   doesn't blow its memory ceiling on a single huge archive.
     const compress = options.compress !== false;
-    const ORIGINALS_CHUNK = 100;
+    // iOS WebKit (and especially the standalone PWA process) gets a
+    // much smaller memory ceiling than desktop Safari. Chunk size is
+    // the main lever — every photo we add to a chunk holds ~2-5 MB
+    // resident until generateAsync emits the blob.
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent || "") ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const isStandalone =
+      ("standalone" in navigator && navigator.standalone === true) ||
+      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    const isIOSPwa = isIOS && isStandalone;
+    const ORIGINALS_CHUNK = isIOSPwa ? 25 : isIOS ? 50 : 100;
+    const interPartPauseMs = isIOSPwa ? 2200 : isIOS ? 1500 : 800;
     if (typeof JSZip === "undefined") {
       toast("ZIP library failed to load.", "err");
       return;
@@ -6244,7 +6255,7 @@ ${nojsFallback}
             ? await reencodeForZip(photo.dataUrl)
             : photo.dataUrl;
           dataUrl = insertExifInto(dataUrl, photo);
-          const bytes = dataUrlToBytes(dataUrl);
+          let bytes = dataUrlToBytes(dataUrl);
           dataUrl = null;
           const stamp = photo.takenAt || photo.uploadedAt || new Date().toISOString();
           const defectPrefix = photo.defect ? "DEFECT_" : "";
@@ -6252,6 +6263,9 @@ ${nojsFallback}
           const labelSlug = slugify(photo.label || `${group.name}-${indexInGroup}`);
           const name = `${defectPrefix}${tagPrefix}${String(indexInGroup).padStart(2, "0")}_${labelSlug}.jpg`;
           folder.file(name, bytes, { date: new Date(stamp) });
+          // JSZip retains its own reference; drop ours so any GC cycle
+          // that fires before generateAsync can reclaim our copy.
+          bytes = null;
           photoPaths.set(photo.id, `${dir}/${name}`);
           if (doneOverall % 4 === 0 || doneOverall === total) {
             toast(`Packaging photos${partLabel}… ${doneOverall}/${total}`);
@@ -6285,7 +6299,7 @@ ${nojsFallback}
 
         toast(`Compressing ZIP${partLabel}…`);
         await yieldToUi();
-        const zipBlob = await zip.generateAsync({ type: "blob", compression: "STORE" });
+        let zipBlob = await zip.generateAsync({ type: "blob", compression: "STORE" });
         let suffix;
         if (compress) {
           suffix = "_photos.zip";
@@ -6295,11 +6309,17 @@ ${nojsFallback}
           suffix = "_photos_originals.zip";
         }
         saveBlob(zipBlob, `${reportBaseName()}${suffix}`);
+        // Drop our refs so the browser can reclaim ~2 × chunk size of
+        // memory before the next chunk starts building. On iOS PWA
+        // this single line is the difference between "completes" and
+        // "page reloads with no warning".
+        zipBlob = null;
         // Give the browser a moment between downloads. iOS in particular
-        // can drop subsequent anchor clicks if they come back-to-back.
+        // can drop subsequent anchor clicks if they come back-to-back,
+        // and a longer pause gives WebKit room to actually GC.
         if (partIdx < numParts - 1) {
           toast(`Part ${partIdx + 1}/${numParts} saved — starting next part…`);
-          await new Promise((r) => setTimeout(r, 800));
+          await new Promise((r) => setTimeout(r, interPartPauseMs));
         }
       }
       toast(
