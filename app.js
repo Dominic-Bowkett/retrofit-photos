@@ -1173,6 +1173,7 @@
       width: "",
       height: "",
       orientation: "",
+      roofWindow: false,
       ...(overrides || {}),
     };
   }
@@ -1218,7 +1219,13 @@
     const frame = WINDOW_FRAMES.includes(win.frame) ? win.frame : "";
     const width = typeof win.width === "string" ? win.width : "";
     const height = typeof win.height === "string" ? win.height : "";
-    const orientation = WINDOW_ORIENTATIONS.includes(win.orientation) ? win.orientation : "";
+    const roofWindow = win.roofWindow === true;
+    // Roof windows can additionally point Horizontal (looking up the
+    // sky from a flat skylight or a Velux at low pitch).
+    const allowedOrientations = roofWindow
+      ? WINDOW_ORIENTATIONS.concat("Horizontal")
+      : WINDOW_ORIENTATIONS;
+    const orientation = allowedOrientations.includes(win.orientation) ? win.orientation : "";
     // Glazing gap is only meaningful on Double / Triple where the age
     // is Unknown or Pre 2002 — single glazing has no cavity to measure.
     const gapAllowed =
@@ -1229,7 +1236,7 @@
       win.type !== type || win.age !== age ||
       win.gap !== effectiveGap || win.frame !== effectiveFrame ||
       win.width !== width || win.height !== height ||
-      win.orientation !== orientation
+      win.orientation !== orientation || win.roofWindow !== roofWindow
     ) {
       changed = true;
     }
@@ -1240,6 +1247,7 @@
     win.width = width;
     win.height = height;
     win.orientation = orientation;
+    win.roofWindow = roofWindow;
     return changed;
   }
 
@@ -2320,18 +2328,34 @@
       opt.textContent = f;
       winFrame.appendChild(opt);
     }
-    {
-      const opt = document.createElement("option");
-      opt.value = "";
-      opt.textContent = "Select orientation";
-      winOrient.appendChild(opt);
-    }
-    for (const o of WINDOW_ORIENTATIONS) {
-      const opt = document.createElement("option");
-      opt.value = o;
-      opt.textContent = o;
-      winOrient.appendChild(opt);
-    }
+    // Build the orientation options. The "Horizontal" option is added
+    // / removed dynamically when the Roof-window pill is toggled.
+    const rebuildOrientationOptions = () => {
+      const current = win.orientation;
+      winOrient.innerHTML = "";
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Select orientation";
+      winOrient.appendChild(placeholder);
+      for (const o of WINDOW_ORIENTATIONS) {
+        const opt = document.createElement("option");
+        opt.value = o;
+        opt.textContent = o;
+        winOrient.appendChild(opt);
+      }
+      if (win.roofWindow) {
+        const opt = document.createElement("option");
+        opt.value = "Horizontal";
+        opt.textContent = "Horizontal";
+        winOrient.appendChild(opt);
+      }
+      // Restore the current value if it's still allowed; otherwise blank.
+      const allowed = win.roofWindow
+        ? WINDOW_ORIENTATIONS.concat("Horizontal")
+        : WINDOW_ORIENTATIONS;
+      winOrient.value = allowed.includes(current) ? current : "";
+    };
+    rebuildOrientationOptions();
 
     const applyVisibility = () => {
       const showFrame = WINDOW_TYPES_NEEDING_FRAME.has(win.type);
@@ -2359,9 +2383,33 @@
     winType.value = win.type || "Double";
     winAge.value = win.age || "";
     winFrame.value = win.frame || "";
-    winOrient.value = win.orientation || "";
     applyVisibility();
     applyGapButtons();
+
+    // Roof-window toggle — when on, "Horizontal" appears as an
+    // orientation option. Toggling off snaps the orientation back to
+    // blank if it was Horizontal.
+    const roofPill = node.querySelector(".room-windows-roof");
+    const roofText = roofPill ? roofPill.querySelector(".room-windows-roof-text") : null;
+    const applyRoofPill = () => {
+      if (!roofPill) return;
+      const on = win.roofWindow === true;
+      roofPill.dataset.state = on ? "on" : "off";
+      roofPill.setAttribute("aria-pressed", String(on));
+      if (roofText) roofText.textContent = on ? "Roof window ✓" : "Roof window";
+    };
+    applyRoofPill();
+    if (roofPill) {
+      roofPill.addEventListener("click", (e) => {
+        e.stopPropagation();
+        win.roofWindow = !(win.roofWindow === true);
+        normalizeOneWindow(win);
+        applyRoofPill();
+        rebuildOrientationOptions();
+        rememberWindowDefaults(win);
+        saveProperty();
+      });
+    }
 
     const winWidth = node.querySelector(".room-windows-width");
     const winHeight = node.querySelector(".room-windows-height");
@@ -2614,7 +2662,13 @@
         room.windows.push(
           makeNewWindow(
             source
-              ? { type: source.type, age: source.age, gap: source.gap, frame: source.frame }
+              ? {
+                  type: source.type,
+                  age: source.age,
+                  gap: source.gap,
+                  frame: source.frame,
+                  roofWindow: source.roofWindow === true,
+                }
               : {}
           )
         );
@@ -4577,6 +4631,7 @@
     { key: "no", label: "No." },
     { key: "room", label: "Room" },
     { key: "windowLabel", label: "Window" },
+    { key: "roof", label: "Roof" },
     { key: "type", label: "Type" },
     { key: "age", label: "Age" },
     { key: "orientation", label: "Orientation" },
@@ -4601,6 +4656,7 @@
           room: room.name || room.roomType || "Room",
           habitability: room.habitability || "",
           windowLabel: "—",
+          roof: "",
           type: "", age: "", orientation: "",
           frame: "", gap: "", width: "", height: "",
         });
@@ -4616,6 +4672,7 @@
           // is also their addition order. Single-window rooms still
           // read "Window 1" so the column has consistent values.
           windowLabel: `Window ${idx + 1}`,
+          roof: w.roofWindow === true ? "Yes" : "",
           type: w.type || "",
           age: w.age || "",
           orientation: w.orientation || "",
@@ -5084,9 +5141,9 @@ td:empty::before,td.empty{color:#94a3b8;content:"—"}
       const tableLeft = margin;
       const tableRight = pageW - margin;
       const tableW = tableRight - tableLeft;
-      // Weights for: No. | Room | Window | Type | Age | Orientation |
-      //              Frame | Gap | Width | Height.
-      const colWeights = [0.7, 2.4, 1.2, 1.2, 1.4, 1.7, 1.3, 1.3, 1.5, 1.5];
+      // Weights for: No. | Room | Window | Roof | Type | Age |
+      //              Orientation | Frame | Gap | Width | Height.
+      const colWeights = [0.6, 2.2, 1.1, 0.7, 1.1, 1.3, 1.6, 1.2, 1.2, 1.4, 1.4];
       const totalWeight = colWeights.reduce((a, b) => a + b, 0);
       const colWidths = colWeights.map((w) => (w / totalWeight) * tableW);
       const colX = [tableLeft];

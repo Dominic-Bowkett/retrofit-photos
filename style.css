@@ -1833,8 +1833,43 @@ input[type="date"]:focus {
   color: var(--accent-ink);
 }
 
-.room-windows-remove {
+.room-windows-roof {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.room-windows-roof[data-state="on"] {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.room-windows-roof-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.room-windows-roof[data-state="on"] .room-windows-roof-dot {
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.45);
+}
+
+.room-windows-remove {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 999px;
