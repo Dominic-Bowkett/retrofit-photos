@@ -2199,6 +2199,74 @@
     return POINTS[idx];
   }
 
+  // Continuous compass watcher used while the camera is open for a
+  // window-photo capture. The shutter / Done event reads the latest
+  // heading from this object and applies it to the target window.
+  const compassWatch = {
+    active: false,
+    eventName: null,
+    listener: null,
+    heading: null,
+  };
+
+  async function startCompassWatch() {
+    if (compassWatch.active) return true;
+    if (typeof DeviceOrientationEvent === "undefined") return false;
+    if (typeof DeviceOrientationEvent.requestPermission === "function") {
+      try {
+        const r = await DeviceOrientationEvent.requestPermission();
+        if (r !== "granted") return false;
+      } catch (_) {
+        return false;
+      }
+    }
+    const eventName = "ondeviceorientationabsolute" in window
+      ? "deviceorientationabsolute"
+      : "deviceorientation";
+    const listener = (e) => {
+      let h = null;
+      if (typeof e.webkitCompassHeading === "number") {
+        h = e.webkitCompassHeading;
+      } else if (e.absolute && typeof e.alpha === "number") {
+        h = (360 - e.alpha) % 360;
+      }
+      if (h != null && Number.isFinite(h)) {
+        compassWatch.heading = ((h % 360) + 360) % 360;
+      }
+    };
+    window.addEventListener(eventName, listener, true);
+    compassWatch.active = true;
+    compassWatch.eventName = eventName;
+    compassWatch.listener = listener;
+    compassWatch.heading = null;
+    return true;
+  }
+
+  function stopCompassWatch() {
+    if (!compassWatch.active) return;
+    if (compassWatch.listener && compassWatch.eventName) {
+      window.removeEventListener(compassWatch.eventName, compassWatch.listener, true);
+    }
+    compassWatch.active = false;
+    compassWatch.listener = null;
+    compassWatch.eventName = null;
+  }
+
+  function startWindowPhotoCapture(room, win) {
+    camera.pendingWindowPhoto = { roomId: room.id, windowId: win.id };
+    // Kick off the compass watcher (with iOS permission if needed)
+    // before opening the camera. If permission is denied we still take
+    // the photo, just without auto-orientation.
+    startCompassWatch().then((ok) => {
+      if (!ok) {
+        toast("Compass not available — photo will save without orientation.", "err");
+      }
+    }).catch((err) => {
+      console.warn("compass watch failed", err);
+    });
+    openCamera(room);
+  }
+
   function buildWindowFieldset(room, win, idx) {
     const tpl = document.getElementById("room-window-template");
     const node = tpl.content.firstElementChild.cloneNode(true);
@@ -2320,6 +2388,13 @@
       captureBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         startLaserCapture(room, win);
+      });
+    }
+    const windowPhotoBtn = node.querySelector(".btn-window-photo");
+    if (windowPhotoBtn) {
+      windowPhotoBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        startWindowPhotoCapture(room, win);
       });
     }
 
@@ -3494,6 +3569,10 @@
     // When set, the next committed photo from this camera session triggers
     // the laser-screen analysis flow rather than the normal evidence flow.
     pendingLaserCapture: null,
+    // When set, the camera session is associated with a specific window
+    // and the latest compass heading captured during the session is
+    // applied to that window's orientation on commit.
+    pendingWindowPhoto: null,
     els: {
       overlay: document.getElementById("camera-overlay"),
       video: document.getElementById("camera-video"),
@@ -3621,6 +3700,17 @@
 
     const laserCapture = camera.pendingLaserCapture;
     camera.pendingLaserCapture = null;
+    const windowPhoto = camera.pendingWindowPhoto;
+    camera.pendingWindowPhoto = null;
+
+    // Snapshot the latest compass reading before the watcher stops —
+    // the user pressed Done a moment ago, the phone is still pointed
+    // at the window.
+    const finalHeading =
+      compassWatch.active && Number.isFinite(compassWatch.heading)
+        ? compassWatch.heading
+        : null;
+    stopCompassWatch();
 
     if (save && camera.buffer.length && camera.group) {
       if (laserCapture) {
@@ -3643,13 +3733,40 @@
           toast("Add a window to this room before capturing from the laser.", "err");
         }
       } else {
+        // Window-photo capture: pre-tag the photos so they file under
+        // Windows even before auto-tag runs.
+        if (windowPhoto) {
+          for (const p of camera.buffer) {
+            if (!p.roomTag) p.roomTag = "Windows";
+          }
+        }
         commitBufferedPhotos(camera.group, camera.buffer);
+        if (windowPhoto) {
+          applyWindowPhotoOrientation(windowPhoto, finalHeading);
+        }
       }
     }
     camera.buffer = [];
     camera.group = null;
     renderCameraBuffer();
     updateCameraCount();
+  }
+
+  function applyWindowPhotoOrientation(target, heading) {
+    if (!heading || !Number.isFinite(heading)) return;
+    const room = (state.property && state.property.rooms || []).find((r) => r.id === target.roomId);
+    if (!room) return;
+    const win = (room.windows || []).find((w) => w.id === target.windowId);
+    if (!win) return;
+    const point = compassHeadingToOrientation(heading);
+    win.orientation = point;
+    normalizeOneWindow(win);
+    saveProperty();
+    const sel = document.querySelector(
+      `[data-room-id="${room.id}"] [data-window-id="${win.id}"] .room-windows-orientation`
+    );
+    if (sel) sel.value = point;
+    toast(`Orientation set to ${point} (${Math.round(heading)}°).`);
   }
 
   function flashScreen() {

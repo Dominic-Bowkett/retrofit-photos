@@ -2008,6 +2008,18 @@ input[type="date"]:focus {
   gap: 6px;
 }
 
+.room-windows-photo-row {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 4px;
+}
+
+.btn-window-photo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* ---------- Laser-screen picker dialog ---------- */
 .laser-picker-card {
   max-width: 480px;
