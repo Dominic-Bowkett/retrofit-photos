@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="stylesheet" href="style.css?v=28" />
+    <link rel="stylesheet" href="style.css?v=29" />
   </head>
   <body>
     <header class="app-header">
@@ -560,6 +560,26 @@
       </div>
     </div>
 
+    <div id="originals-parts-dialog" class="dialog" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="originals-parts-title">
+      <div class="dialog-backdrop" id="originals-parts-backdrop"></div>
+      <div class="dialog-card">
+        <h2 id="originals-parts-title">Originals ZIP — <span id="originals-parts-count">0 parts</span></h2>
+        <p>
+          Tap <strong>Save part N</strong> to download each part one at a time.
+          You can leave the app between parts — your progress is saved here, so
+          if iOS reloads the page when you come back, the unsaved parts will
+          still be waiting for you.
+        </p>
+        <ol class="originals-parts-list" id="originals-parts-list"></ol>
+        <p class="dialog-help">
+          Each part is a separate ZIP. Save them somewhere you can re-combine
+          them later (Drive, Files, your computer). The PDF and the compressed
+          ZIP are unaffected by this — they don't need to be split.
+        </p>
+        <button class="btn btn-ghost-dark" id="originals-parts-cancel" type="button">Cancel and clear plan</button>
+      </div>
+    </div>
+
     <div id="export-photos-dialog" class="dialog" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="export-photos-title">
       <div class="dialog-backdrop" id="export-photos-backdrop"></div>
       <div class="dialog-card">
@@ -625,6 +645,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
-    <script src="app.js?v=28"></script>
+    <script src="app.js?v=29"></script>
   </body>
 </html>

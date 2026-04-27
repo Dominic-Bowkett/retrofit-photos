@@ -503,6 +503,11 @@
     pdfShareToggleWrap: document.getElementById("pdf-share-toggle-wrap"),
     exportShare: document.getElementById("export-share"),
     exportShareToggleWrap: document.getElementById("export-share-toggle-wrap"),
+    originalsPartsDialog: document.getElementById("originals-parts-dialog"),
+    originalsPartsBackdrop: document.getElementById("originals-parts-backdrop"),
+    originalsPartsTitle: document.getElementById("originals-parts-count"),
+    originalsPartsList: document.getElementById("originals-parts-list"),
+    originalsPartsCancelBtn: document.getElementById("originals-parts-cancel"),
     pdfLayoutCancelBtn: document.getElementById("pdf-layout-cancel"),
     viewToggleBtns: Array.from(document.querySelectorAll(".view-toggle-btn")),
     lightbox: document.getElementById("lightbox"),
@@ -1519,6 +1524,11 @@
     renderPropertySelect();
     updateExportButton();
     setSaveStatus("saved");
+
+    // If a previous originals export was interrupted (page reloaded
+    // after the user saved a part), pop the resume dialog so they
+    // can pick up where they left off.
+    setTimeout(maybeResumeOriginalsPlan, 200);
   }
 
   function renderPropertySelect() {
@@ -6203,6 +6213,286 @@ ${nojsFallback}
 </html>`;
   }
 
+  // -------------------- Resumable originals export plan --------------------
+  // iOS aggressively reclaims memory from a backgrounded PWA, so when
+  // the user leaves the app to file a downloaded ZIP somewhere, the
+  // page often reloads on return — taking the in-memory loop with it.
+  // We persist a small plan in localStorage so the user can resume the
+  // multi-part flow tap by tap, and a reload doesn't lose the place.
+  const ORIGINALS_PLAN_KEY = "retrofit-photos:originals-plan";
+
+  function loadOriginalsPlan() {
+    try {
+      const v = localStorage.getItem(ORIGINALS_PLAN_KEY);
+      return v ? JSON.parse(v) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+  function saveOriginalsPlan(plan) {
+    try {
+      if (plan) localStorage.setItem(ORIGINALS_PLAN_KEY, JSON.stringify(plan));
+      else localStorage.removeItem(ORIGINALS_PLAN_KEY);
+    } catch (_) { /* noop */ }
+  }
+  function clearOriginalsPlan() { saveOriginalsPlan(null); }
+
+  // Build the chunk plan from the property's current photos. Each
+  // chunk is just a list of photo IDs — small enough to live in
+  // localStorage, and we resolve them back to live photos at build
+  // time.
+  function buildOriginalsPlan(opts) {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent || "") ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const isStandalone =
+      ("standalone" in navigator && navigator.standalone === true) ||
+      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    const isIOSPwa = isIOS && isStandalone;
+    const ORIGINALS_CHUNK = isIOSPwa ? 25 : isIOS ? 50 : 100;
+
+    const photoIds = [];
+    for (const g of state.property.groups || []) {
+      for (const pid of g.photoIds || []) {
+        const photo = state.photos.get(pid);
+        if (!photo || isLaserCapturePhoto(photo)) continue;
+        photoIds.push(pid);
+      }
+    }
+    for (const room of state.property.rooms || []) {
+      for (const pid of room.photoIds || []) {
+        const photo = state.photos.get(pid);
+        if (!photo || isLaserCapturePhoto(photo)) continue;
+        photoIds.push(pid);
+      }
+    }
+    if (!photoIds.length) return null;
+    const photoIdsByPart = [];
+    for (let i = 0; i < photoIds.length; i += ORIGINALS_CHUNK) {
+      photoIdsByPart.push(photoIds.slice(i, i + ORIGINALS_CHUNK));
+    }
+    return {
+      propertyId: state.property.id,
+      propertyName: state.property.name || "",
+      photoIdsByPart,
+      partsDone: [],
+      share: !!(opts && opts.share),
+      startedAt: new Date().toISOString(),
+    };
+  }
+
+  function partIsDone(plan, partIdx) {
+    return Array.isArray(plan && plan.partsDone) && plan.partsDone.includes(partIdx);
+  }
+
+  // Build and save a single part of the originals ZIP. Looks up live
+  // photos by id from state.photos so that even if state changed since
+  // the plan was created, only photos that still exist get included.
+  async function saveOriginalsPart(plan, partIdx) {
+    if (typeof JSZip === "undefined") throw new Error("ZIP library failed to load.");
+    const partIds = plan.photoIdsByPart[partIdx] || [];
+    if (!partIds.length) throw new Error("Empty part — nothing to save.");
+    const numParts = plan.photoIdsByPart.length;
+    const partLabel = numParts > 1 ? ` (part ${partIdx + 1}/${numParts})` : "";
+
+    // Yield to UI between heavy steps so iOS doesn't kill the page.
+    const yieldToUi = () => new Promise((r) => setTimeout(r, 0));
+    toast(`Packaging photos${partLabel}…`);
+    await yieldToUi();
+
+    const zip = new JSZip();
+    const dirForGroup = new Map();
+    const dirTaken = new Map();
+    const uniqueDir = (base) => {
+      let dir = base;
+      const n = (dirTaken.get(dir) || 0) + 1;
+      dirTaken.set(dir, n);
+      if (n > 1) dir = `${dir}-${n}`;
+      return dir;
+    };
+
+    // Resolve each photo back to its current owner so the directory
+    // structure mirrors what the user sees in the app.
+    const ownerOf = (photoId) => {
+      for (const g of state.property.groups || []) {
+        if ((g.photoIds || []).includes(photoId)) return { group: g, room: null };
+      }
+      for (const r of state.property.rooms || []) {
+        if ((r.photoIds || []).includes(photoId)) return { group: r, room: r };
+      }
+      return null;
+    };
+
+    const groupIndexCounter = new Map();
+    let processed = 0;
+    for (const pid of partIds) {
+      const photo = state.photos.get(pid);
+      if (!photo || isLaserCapturePhoto(photo)) continue;
+      const owner = ownerOf(pid);
+      if (!owner) continue;
+      const { group, room } = owner;
+      let dir = dirForGroup.get(group.id);
+      if (!dir) {
+        if (room) {
+          const roomSlug = slugify(`${room.name || room.roomType} ${room.habitability}`);
+          dir = uniqueDir(`rooms/${roomSlug}`);
+        } else {
+          dir = uniqueDir(slugify(group.name));
+        }
+        dirForGroup.set(group.id, dir);
+      }
+      const folder = zip.folder(dir);
+      const indexInGroup = (groupIndexCounter.get(group.id) || 0) + 1;
+      groupIndexCounter.set(group.id, indexInGroup);
+
+      let dataUrl = insertExifInto(photo.dataUrl, photo);
+      let bytes = dataUrlToBytes(dataUrl);
+      dataUrl = null;
+      const stamp = photo.takenAt || photo.uploadedAt || new Date().toISOString();
+      const defectPrefix = photo.defect ? "DEFECT_" : "";
+      const tagPrefix = room && photo.roomTag ? `${slugify(photo.roomTag)}_` : "";
+      const labelSlug = slugify(photo.label || `${group.name}-${indexInGroup}`);
+      const name = `${defectPrefix}${tagPrefix}${String(indexInGroup).padStart(2, "0")}_${labelSlug}.jpg`;
+      folder.file(name, bytes, { date: new Date(stamp) });
+      bytes = null;
+      processed += 1;
+      if (processed % 4 === 0 || processed === partIds.length) {
+        toast(`Packaging photos${partLabel}… ${processed}/${partIds.length}`);
+        await yieldToUi();
+      }
+    }
+
+    if (numParts > 1) {
+      zip.file(
+        "README.txt",
+        `Retrofit Photos — originals export\n` +
+          `Part ${partIdx + 1} of ${numParts}\n` +
+          `Photos in this archive: ${processed}\n`
+      );
+    }
+
+    toast(`Compressing ZIP${partLabel}…`);
+    await yieldToUi();
+    let zipBlob = await zip.generateAsync({ type: "blob", compression: "STORE" });
+    const suffix = numParts > 1
+      ? `_photos_originals_part${partIdx + 1}_of_${numParts}.zip`
+      : "_photos_originals.zip";
+    const filename = `${reportBaseName()}${suffix}`;
+    const result = await deliverBlob(zipBlob, filename, {
+      share: plan.share,
+      title: numParts > 1 ? `${filename} (part ${partIdx + 1}/${numParts})` : filename,
+      text: `Retrofit Photos — ${plan.propertyName || ""}`.trim(),
+    });
+    zipBlob = null;
+    if (result !== "cancelled") {
+      // Mark this part as done and persist immediately so a reload
+      // before the user taps the next part still remembers we got here.
+      plan.partsDone = Array.from(new Set([...(plan.partsDone || []), partIdx])).sort((a, b) => a - b);
+      saveOriginalsPlan(plan);
+    }
+    return result;
+  }
+
+  function openOriginalsPartsDialog(plan) {
+    if (!els.originalsPartsDialog) return;
+    renderOriginalsPartsDialog(plan);
+    els.originalsPartsDialog.hidden = false;
+    els.originalsPartsDialog.setAttribute("aria-hidden", "false");
+  }
+  function closeOriginalsPartsDialog() {
+    if (!els.originalsPartsDialog) return;
+    els.originalsPartsDialog.hidden = true;
+    els.originalsPartsDialog.setAttribute("aria-hidden", "true");
+  }
+
+  function renderOriginalsPartsDialog(plan) {
+    if (!els.originalsPartsList || !els.originalsPartsTitle) return;
+    const numParts = plan.photoIdsByPart.length;
+    const doneCount = (plan.partsDone || []).length;
+    els.originalsPartsTitle.textContent =
+      numParts === 1 ? "1 part" : `${numParts} parts (${doneCount} saved)`;
+    els.originalsPartsList.innerHTML = "";
+    const nextIdx = plan.photoIdsByPart.findIndex((_p, i) => !partIsDone(plan, i));
+    plan.photoIdsByPart.forEach((ids, i) => {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "part-btn";
+      const isDone = partIsDone(plan, i);
+      const isNext = !isDone && i === nextIdx;
+      btn.dataset.state = isDone ? "done" : isNext ? "next" : "pending";
+      btn.disabled = isDone;
+      btn.textContent = `Save part ${i + 1} of ${numParts}`;
+      const meta = document.createElement("span");
+      meta.className = "part-meta";
+      meta.textContent = `${ids.length} photo${ids.length === 1 ? "" : "s"}`;
+      btn.addEventListener("click", async () => {
+        if (btn.disabled) return;
+        btn.disabled = true;
+        btn.dataset.state = "busy";
+        btn.textContent = `Building part ${i + 1}…`;
+        try {
+          const result = await saveOriginalsPart(plan, i);
+          if (result === "cancelled") {
+            // User cancelled the share sheet — leave the part as
+            // pending so they can try again.
+            renderOriginalsPartsDialog(plan);
+          } else {
+            // Re-render so the next part lights up and finished parts
+            // mark themselves complete.
+            renderOriginalsPartsDialog(plan);
+            // If everything is done, clear the plan and close.
+            if ((plan.partsDone || []).length >= numParts) {
+              clearOriginalsPlan();
+              toast(`All ${numParts} parts saved.`);
+              setTimeout(closeOriginalsPartsDialog, 800);
+            }
+          }
+        } catch (err) {
+          console.error(err);
+          toast(err.message || `Failed to save part ${i + 1}.`, "err");
+          renderOriginalsPartsDialog(plan);
+        }
+      });
+      li.appendChild(btn);
+      li.appendChild(meta);
+      els.originalsPartsList.appendChild(li);
+    });
+  }
+
+  function startOriginalsExport(opts) {
+    const plan = buildOriginalsPlan(opts);
+    if (!plan) {
+      toast("No photos to export.", "err");
+      return;
+    }
+    if (plan.photoIdsByPart.length === 1) {
+      // Single part — just save it directly, no need for the parts dialog.
+      saveOriginalsPart(plan, 0).catch((err) => {
+        console.error(err);
+        toast(err.message || "Failed to save originals.", "err");
+      });
+      return;
+    }
+    saveOriginalsPlan(plan);
+    openOriginalsPartsDialog(plan);
+  }
+
+  // On boot, if a previous originals export was interrupted (page
+  // reloaded mid-way), surface the partially-completed plan so the
+  // user can resume.
+  function maybeResumeOriginalsPlan() {
+    const plan = loadOriginalsPlan();
+    if (!plan || !plan.photoIdsByPart || !plan.photoIdsByPart.length) return;
+    if (!state.property || plan.propertyId !== state.property.id) return;
+    const numParts = plan.photoIdsByPart.length;
+    const doneCount = (plan.partsDone || []).length;
+    if (doneCount >= numParts) {
+      clearOriginalsPlan();
+      return;
+    }
+    openOriginalsPartsDialog(plan);
+  }
+
   async function exportPhotosAsZip(options = {}) {
     // compress:true  — re-encode each photo on its way into the ZIP (iOS
     //   friendly; recommended for properties with 150+ photos).
@@ -6212,6 +6502,12 @@ ${nojsFallback}
     //   doesn't blow its memory ceiling on a single huge archive.
     const compress = options.compress !== false;
     const share = !!options.share;
+    if (!compress) {
+      // The originals path goes through the resumable parts dialog
+      // instead of the auto-loop below, so iOS can't kill us mid-way.
+      startOriginalsExport({ share });
+      return;
+    }
     // iOS WebKit (and especially the standalone PWA process) gets a
     // much smaller memory ceiling than desktop Safari. Chunk size is
     // the main lever — every photo we add to a chunk holds ~2-5 MB
@@ -6860,6 +7156,16 @@ ${nojsFallback}
     if (els.exportPhotosBtn.disabled) return;
     openExportPhotosDialog();
   });
+  if (els.originalsPartsCancelBtn) {
+    els.originalsPartsCancelBtn.addEventListener("click", () => {
+      if (!confirm("Clear the saved parts plan? Saved parts stay where you put them — only the in-app progress is cleared.")) return;
+      clearOriginalsPlan();
+      closeOriginalsPartsDialog();
+    });
+  }
+  if (els.originalsPartsBackdrop) {
+    els.originalsPartsBackdrop.addEventListener("click", closeOriginalsPartsDialog);
+  }
   els.exportPhotosCancelBtn.addEventListener("click", closeExportPhotosDialog);
   els.exportPhotosBackdrop.addEventListener("click", closeExportPhotosDialog);
   const exportShareWanted = () =>
