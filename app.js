@@ -6830,13 +6830,12 @@ ${nojsFallback}
     !els.pdfIncludeAnalysis || els.pdfIncludeAnalysis.checked;
   const pdfShareWanted = () =>
     !!(els.pdfShare && !els.pdfShare.disabled && els.pdfShare.checked);
-  // Reveal the share toggle on devices that can actually share files,
-  // and default it on for iOS / Android where it's the friendlier path.
+  // Reveal the share toggle on devices that can actually share files.
+  // Default OFF — the share sheet path is opt-in; the regular download
+  // route is well-tested and is what the user probably already trusts.
   if (canShareFiles() && els.pdfShareToggleWrap && els.pdfShare) {
     els.pdfShareToggleWrap.hidden = false;
-    const isMobile = /iPad|iPhone|iPod|Android/.test(navigator.userAgent || "") ||
-      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    els.pdfShare.checked = isMobile;
+    els.pdfShare.checked = false;
   }
   els.pdfLayoutGroupBtn.addEventListener("click", () => {
     const includeAnalysis = pdfIncludeAnalysis();
@@ -6867,9 +6866,7 @@ ${nojsFallback}
     !!(els.exportShare && !els.exportShare.disabled && els.exportShare.checked);
   if (canShareFiles() && els.exportShareToggleWrap && els.exportShare) {
     els.exportShareToggleWrap.hidden = false;
-    const isMobile = /iPad|iPhone|iPod|Android/.test(navigator.userAgent || "") ||
-      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    els.exportShare.checked = isMobile;
+    els.exportShare.checked = false;
   }
   els.exportPhotosShareBtn.addEventListener("click", () => {
     // Keep synchronous up to navigator.share() so iOS grants the gesture.
