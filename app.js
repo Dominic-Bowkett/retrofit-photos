@@ -480,6 +480,11 @@
     autolabelScope: document.getElementById("autolabel-scope"),
     autolabelRunBtn: document.getElementById("autolabel-run"),
     autolabelCancelBtn: document.getElementById("autolabel-cancel"),
+    autotagScope: document.getElementById("autotag-scope"),
+    autotagRunBtn: document.getElementById("autotag-run"),
+    bulkLabelBanner: document.getElementById("bulk-label-banner"),
+    bulkLabelText: document.getElementById("bulk-label-text"),
+    bulkLabelCancelBtn: document.getElementById("bulk-label-cancel"),
     settingsDialog: document.getElementById("settings-dialog"),
     settingsBackdrop: document.getElementById("settings-backdrop"),
     settingsApiKey: document.getElementById("settings-api-key"),
@@ -3553,9 +3558,7 @@
       if (aiGlyphNode) aiGlyphNode.textContent = "…";
       try {
         const owner = currentLightboxOwner();
-        const contextName = owner && owner.name
-          ? (owner.habitability ? `${owner.name} (${owner.habitability})` : owner.name)
-          : "";
+        const contextName = owner && owner.name ? owner.name : "";
         const label = await runPhotoLabel(p, contextName);
         if (label) {
           p.label = label;
@@ -4491,28 +4494,31 @@
 
     const locLine = contextualLocation
       ? `This photo is filed under "${contextualLocation}" in the property survey. ` +
-        `Use that as the location context if the label needs it ` +
-        `(e.g. "Bedroom 1 — radiator", "Bedroom 1", "Meter cupboard — electricity meter").`
+        `Every label MUST start with "${contextualLocation}" exactly. If there's a ` +
+        `specific subject (radiator, boiler, electricity meter, window, …) follow ` +
+        `with " — " and 1–4 words describing it. If the photo is just a wide view ` +
+        `of the location, the label can be the location name on its own.`
       : "";
 
     const systemPrompt =
       "You are a Domestic Energy Assessor's assistant writing concise photo labels for a UK retrofit survey. " +
-      "Given a photo, produce a short 2–8 word label describing what's in the frame, " +
-      "with location context when helpful. " +
+      "Given a photo, produce a short label that ALWAYS starts with the location it's filed under. " +
+      "If the photo shows a specific subject, follow the location with ' — ' (em dash) and 1–4 words " +
+      "describing the subject. If it's just a wide / general view, the label can be the location name only. " +
       "Examples of good labels:\n" +
-      "- Living room\n" +
+      "- Living Room\n" +
       "- Bedroom 1\n" +
       "- Bedroom 1 — radiator\n" +
       "- Kitchen — boiler\n" +
       "- Meter cupboard — electricity meter\n" +
-      "- Front elevation from street\n" +
+      "- External Elevations — front from street\n" +
       "- Loft — insulation\n" +
-      "Keep labels in lowercase except proper nouns and model numbers. " +
+      "Use Title Case for the location, lowercase for the rest except proper nouns and model numbers. " +
       "Do not include camera metadata, dates, or the word 'photo'. " +
       "Respond with ONLY the label text via the JSON schema — no quotes, no preamble.";
 
     const userPrompt = locLine
-      ? `${locLine} Write a short label for this photo. Return JSON with a single "label" field.`
+      ? `${locLine} Write a short label. Return JSON with a single "label" field.`
       : 'Write a short label for this photo. Return JSON with a single "label" field.';
 
     const body = {
@@ -4585,7 +4591,45 @@
     } catch (_) {
       throw new Error("Claude returned a non-JSON response.");
     }
-    return (data.label || "").toString().trim();
+    let label = (data.label || "").toString().trim();
+    // Strip surrounding quotes / fullstops Claude sometimes adds.
+    label = label.replace(/^["'“”‘’]+|["'“”‘’.]+$/g, "").trim();
+    if (contextualLocation && label) {
+      const loc = contextualLocation.trim();
+      const lower = label.toLowerCase();
+      const locLower = loc.toLowerCase();
+      // Already starts with the location? Leave alone (allow either
+      // exact match, or `Loc — extra`, or `Loc - extra` with hyphen).
+      const startsWithLoc =
+        lower === locLower ||
+        lower.startsWith(`${locLower} — `) ||
+        lower.startsWith(`${locLower} - `);
+      if (!startsWithLoc) {
+        // Drop any leading location-like prefix the model invented so
+        // we don't end up with "Living Room — Kitchen — radiator".
+        const cleaned = label.replace(/^[^—-]+[—-]\s*/, "").trim();
+        label = cleaned ? `${loc} — ${cleaned}` : loc;
+      }
+    }
+    return label;
+  }
+
+  // Shared state + UI for bulk AI passes (label / tag). Each pass
+  // shows the same floating banner with a Cancel button so the user
+  // can stop a long run without having to hammer the back button.
+  const bulkLabelState = { running: false, cancelRequested: false };
+
+  function showBulkLabelBanner(text) {
+    if (!els.bulkLabelBanner) return;
+    if (els.bulkLabelText) els.bulkLabelText.textContent = text;
+    els.bulkLabelBanner.hidden = false;
+  }
+  function updateBulkLabelBanner(text) {
+    if (els.bulkLabelText) els.bulkLabelText.textContent = text;
+  }
+  function hideBulkLabelBanner() {
+    if (!els.bulkLabelBanner) return;
+    els.bulkLabelBanner.hidden = true;
   }
 
   // Walk every photo in the current property and optionally re-label it
@@ -4628,21 +4672,25 @@
         const photo = state.photos.get(pid);
         if (!photo) continue;
         if (skip(photo, room.name)) continue;
-        targets.push({
-          photo,
-          sourceName: `${room.name} (${room.habitability})`,
-        });
+        // Just the room name, not habitability — labels read better as
+        // "Bedroom 1 — radiator" than "Bedroom 1 (Habitable) — radiator".
+        targets.push({ photo, sourceName: room.name });
       }
     }
     if (!targets.length) {
       toast("No photos to label.");
       return { processed: 0, failed: 0 };
     }
+    bulkLabelState.cancelRequested = false;
+    bulkLabelState.running = true;
+    showBulkLabelBanner(`Labelling 0/${targets.length}…`);
     let processed = 0;
     let failed = 0;
+    let cancelled = false;
     for (const { photo, sourceName } of targets) {
+      if (bulkLabelState.cancelRequested) { cancelled = true; break; }
       processed += 1;
-      toast(`Labelling ${processed}/${targets.length}…`);
+      updateBulkLabelBanner(`Labelling ${processed}/${targets.length}…`);
       try {
         const label = await runPhotoLabel(photo, sourceName);
         if (label) {
@@ -4657,18 +4705,101 @@
         failed += 1;
         console.warn("Label failed for photo", photo.id, err);
       }
-      // Small breather so the toast updates, and so we don't hammer
+      // Small breather so the banner updates, and so we don't hammer
       // the API at full speed on large properties.
       await new Promise((r) => setTimeout(r, 30));
     }
+    bulkLabelState.running = false;
+    bulkLabelState.cancelRequested = false;
+    hideBulkLabelBanner();
     renderGroups();
-    toast(
-      failed
-        ? `Labelled ${processed - failed}/${targets.length} (${failed} failed).`
-        : `Labelled ${processed}/${targets.length}.`,
-      failed ? "err" : undefined
-    );
+    if (cancelled) {
+      toast(`Cancelled. Labelled ${processed - failed}/${targets.length} so far.`);
+    } else {
+      toast(
+        failed
+          ? `Labelled ${processed - failed}/${targets.length} (${failed} failed).`
+          : `Labelled ${processed}/${targets.length}.`,
+        failed ? "err" : undefined
+      );
+    }
     return { processed, failed };
+  }
+
+  // Walk every photo in the current property and tag it via Claude
+  // (Heating / Meters / Windows / …). Mirrors runBulkLabel: same
+  // banner + cancel UX, but uses the auto_tag preset and writes to
+  // photo.roomTag instead of photo.label.
+  async function runBulkTag(opts) {
+    const scope = opts && opts.scope === "all" ? "all" : "untagged";
+    const targets = [];
+    for (const g of state.property.groups || []) {
+      for (const pid of g.photoIds || []) {
+        const photo = state.photos.get(pid);
+        if (!photo || isLaserCapturePhoto(photo)) continue;
+        if (scope === "untagged" && photo.roomTag) continue;
+        targets.push(photo);
+      }
+    }
+    for (const room of state.property.rooms || []) {
+      for (const pid of room.photoIds || []) {
+        const photo = state.photos.get(pid);
+        if (!photo || isLaserCapturePhoto(photo)) continue;
+        if (scope === "untagged" && photo.roomTag) continue;
+        targets.push(photo);
+      }
+    }
+    if (!targets.length) {
+      toast(scope === "all" ? "No photos to tag." : "Every photo already has a tag.");
+      return { processed: 0, tagged: 0, failed: 0 };
+    }
+    bulkLabelState.cancelRequested = false;
+    bulkLabelState.running = true;
+    showBulkLabelBanner(`Tagging 0/${targets.length}…`);
+    let processed = 0;
+    let tagged = 0;
+    let failed = 0;
+    let cancelled = false;
+    for (const photo of targets) {
+      if (bulkLabelState.cancelRequested) { cancelled = true; break; }
+      processed += 1;
+      updateBulkLabelBanner(`Tagging ${processed}/${targets.length}…`);
+      try {
+        const data = await runPhotoAutoTag(photo);
+        const tag = data && data.tag;
+        if (tag && ROOM_TAGS.includes(tag)) {
+          // Don't clobber a tag the user has just set manually.
+          const fresh = state.photos.get(photo.id);
+          if (fresh && (scope === "all" || !fresh.roomTag)) {
+            fresh.roomTag = tag;
+            tagged += 1;
+            try { await savePhotoNow(fresh); }
+            catch (err) { console.warn("Failed to persist auto-tag", err); }
+            syncThumbRoomTagDropdowns(photo.id, tag);
+          }
+        }
+      } catch (err) {
+        failed += 1;
+        console.warn("Auto-tag failed for photo", photo.id, err);
+      }
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    bulkLabelState.running = false;
+    bulkLabelState.cancelRequested = false;
+    hideBulkLabelBanner();
+    saveProperty();
+    renderGroups();
+    if (cancelled) {
+      toast(`Cancelled. Tagged ${tagged}/${targets.length} so far.`);
+    } else {
+      toast(
+        failed
+          ? `Tagged ${tagged}/${targets.length} (${failed} failed).`
+          : `Tagged ${tagged}/${targets.length}.`,
+        failed ? "err" : undefined
+      );
+    }
+    return { processed, tagged, failed };
   }
 
   // Build a compact one-line summary of an AI analysis for the PDF caption.
@@ -7030,6 +7161,33 @@ ${nojsFallback}
       } finally {
         els.autolabelRunBtn.disabled = false;
         els.autolabelRunBtn.textContent = "Run";
+      }
+    });
+  }
+  if (els.bulkLabelCancelBtn) {
+    els.bulkLabelCancelBtn.addEventListener("click", () => {
+      if (!bulkLabelState.running) return;
+      bulkLabelState.cancelRequested = true;
+      els.bulkLabelCancelBtn.disabled = true;
+      updateBulkLabelBanner("Cancelling…");
+      // Re-enable on next tick so subsequent runs can use it.
+      setTimeout(() => { els.bulkLabelCancelBtn.disabled = false; }, 1500);
+    });
+  }
+  if (els.autotagRunBtn) {
+    els.autotagRunBtn.addEventListener("click", async () => {
+      const scope = els.autotagScope ? els.autotagScope.value : "untagged";
+      els.autotagRunBtn.disabled = true;
+      els.autotagRunBtn.textContent = "Working…";
+      try {
+        closeAutolabelDialog();
+        await runBulkTag({ scope });
+      } catch (err) {
+        console.error(err);
+        toast(err.message || "Auto-tag failed.", "err");
+      } finally {
+        els.autotagRunBtn.disabled = false;
+        els.autotagRunBtn.textContent = "Run auto-tag";
       }
     });
   }

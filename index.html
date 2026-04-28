@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="stylesheet" href="style.css?v=33" />
+    <link rel="stylesheet" href="style.css?v=34" />
   </head>
   <body>
     <header class="app-header">
@@ -406,6 +406,11 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+    <div id="bulk-label-banner" class="bulk-label-banner" hidden role="status" aria-live="polite">
+      <span class="bulk-label-text" id="bulk-label-text">Labelling…</span>
+      <button type="button" class="btn btn-danger-ghost" id="bulk-label-cancel">Cancel</button>
+    </div>
+
     <button id="collapse-fab" class="collapse-fab" type="button" hidden aria-label="Collapse all open sections">
       <span class="collapse-fab-arrow" aria-hidden="true">▴</span>
       <span class="collapse-fab-text">Close all</span>
@@ -536,28 +541,37 @@
     <div id="autolabel-dialog" class="dialog" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="autolabel-title">
       <div class="dialog-backdrop" id="autolabel-backdrop"></div>
       <div class="dialog-card">
-        <h2 id="autolabel-title">Auto-label photos</h2>
-        <p>Generate a short label for every photo in this property using Claude. Labels are based on what's visible plus the section the photo is filed under.</p>
+        <h2 id="autolabel-title">Auto-label &amp; tag</h2>
+        <p>Generate labels or photo tags (Heating / Meters / Windows / …) across this property using Claude.</p>
         <div class="settings-grid">
           <label class="settings-field">
-            <span>Scope</span>
+            <span>Label scope</span>
             <select id="autolabel-scope">
               <option value="default-or-empty" selected>Only photos with the default label (recommended)</option>
               <option value="unlabelled">Only photos with no label at all</option>
               <option value="all">All photos (overwrite existing labels)</option>
             </select>
           </label>
+          <label class="settings-field">
+            <span>Tag scope</span>
+            <select id="autotag-scope">
+              <option value="untagged" selected>Only untagged photos (recommended)</option>
+              <option value="all">All photos (overwrite existing tags)</option>
+            </select>
+          </label>
         </div>
         <p class="dialog-help">
           Every newly-captured photo starts with a default label like
-          <em>"Bedroom 1 — 3"</em>. The default scope replaces those with
-          something more descriptive (e.g. <em>"Bedroom 1 — radiator"</em>,
-          <em>"Meter cupboard — electricity meter"</em>) while leaving any
-          labels you've typed manually alone. Uses the model chosen in
-          Settings — <strong>Haiku is much cheaper</strong> for bulk labelling.
+          <em>"Bedroom 1 — 3"</em>. <strong>Run auto-label</strong> replaces those
+          with something more descriptive while leaving any labels you've
+          typed manually alone. <strong>Run auto-tag</strong> sorts photos
+          into the same tags the camera-capture flow uses (Heating /
+          Meters / Ventilation / …). Uses the model chosen in Settings —
+          <strong>Haiku is much cheaper</strong> for bulk runs.
         </p>
         <div class="dialog-actions">
-          <button class="btn btn-primary" id="autolabel-run" type="button">Run</button>
+          <button class="btn btn-primary" id="autolabel-run" type="button">Run auto-label</button>
+          <button class="btn" id="autotag-run" type="button">Run auto-tag</button>
         </div>
         <button class="btn btn-ghost-dark" id="autolabel-cancel" type="button">Cancel</button>
       </div>
@@ -648,6 +662,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
-    <script src="app.js?v=33"></script>
+    <script src="app.js?v=34"></script>
   </body>
 </html>

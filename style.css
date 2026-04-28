@@ -1380,6 +1380,46 @@ input[type="date"]:focus {
   z-index: 200;
 }
 
+.bulk-label-banner {
+  position: fixed;
+  left: 50%;
+  bottom: calc(80px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 220;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 8px 16px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-ink);
+  font-size: 0.9rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25);
+  max-width: 92vw;
+}
+
+.bulk-label-banner[hidden] {
+  display: none;
+}
+
+.bulk-label-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bulk-label-banner .btn {
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--danger);
+  border-color: rgba(255, 255, 255, 0.9);
+  padding: 5px 12px;
+  font-size: 0.82rem;
+}
+
+.bulk-label-banner .btn:hover {
+  background: #fff;
+}
+
 .collapse-fab {
   position: fixed;
   right: 16px;
