@@ -5446,7 +5446,9 @@ td:empty::before,td.empty{color:#94a3b8;content:"—"}
     const includeAnalysis = opts ? opts.includeAnalysis !== false : true;
     const share = !!(opts && opts.share);
     try {
-      const built = await buildPdf({ layout, includeAnalysis });
+      // The build path needs every photo's dataUrl resident; wrap so
+      // the visibility guard doesn't unload mid-build.
+      const built = await withPhotoDataUrls(() => buildPdf({ layout, includeAnalysis }));
       // Differentiate the filename so the user can tell at a glance which
       // mode ran, and pick up a new download on subsequent exports instead
       // of the browser re-opening a cached copy with the same name.
@@ -5467,6 +5469,14 @@ td:empty::before,td.empty{color:#94a3b8;content:"—"}
         toast("Share cancelled.");
       } else {
         toast(`PDF saved (${layoutLabel}, ${aiLabel}).`);
+      }
+      // Once the file is in the user's hands, we don't need the
+      // dataUrls in memory any more — let the visibility guard
+      // reclaim them next time the PWA is backgrounded so opening
+      // the PDF doesn't trigger a reload-on-return.
+      if (document.visibilityState === "hidden" && !memGuard.manualPause && memGuard.busyCount === 0) {
+        unloadAllPhotoDataUrls();
+        memGuard.unloaded = true;
       }
     } catch (err) {
       console.error(err);
@@ -6419,7 +6429,9 @@ ${nojsFallback}
     // reload the PWA when the user returns from saving a part to
     // Drive / Files / Dropbox. Each part's saveOriginalsPart re-reads
     // from IDB on demand, so state.photos can hold metadata only.
+    setMemGuardManualPause(true);
     unloadAllPhotoDataUrls();
+    memGuard.unloaded = true;
     renderOriginalsPartsDialog(plan);
     els.originalsPartsDialog.hidden = false;
     els.originalsPartsDialog.setAttribute("aria-hidden", "false");
@@ -6429,9 +6441,10 @@ ${nojsFallback}
     els.originalsPartsDialog.hidden = true;
     els.originalsPartsDialog.setAttribute("aria-hidden", "true");
     // Restore in-memory dataUrls so thumbs come back to life.
-    reloadAllPhotoDataUrls().catch((err) => {
-      console.warn("Failed to reload photo dataUrls", err);
-    });
+    setMemGuardManualPause(false);
+    reloadAllPhotoDataUrls()
+      .then(() => { memGuard.unloaded = false; })
+      .catch((err) => console.warn("Failed to reload photo dataUrls", err));
   }
 
   // Drop dataUrls from state.photos to slash the PWA's resident memory
@@ -6473,6 +6486,81 @@ ${nojsFallback}
     // Re-render so the now-restored thumbs appear again.
     if (typeof renderRooms === "function") renderRooms();
     if (typeof renderGroups === "function") renderGroups();
+  }
+
+  // -------------------- Memory guard for iOS PWA --------------------
+  // iOS aggressively reclaims memory from a backgrounded PWA. Holding
+  // every photo's dataUrl in JS heap (~3-5 MB each) puts the process
+  // well above the threshold. When visibility flips to hidden we
+  // proactively unload dataUrls so the process is small enough that
+  // iOS doesn't reclaim it; on return we lazy-reload from IDB.
+  const memGuard = {
+    unloaded: false,
+    busyCount: 0,    // > 0 → an export / camera op needs dataUrls in memory
+    manualPause: false, // parts dialog is managing it itself
+    pendingHide: null,
+  };
+
+  function setMemGuardManualPause(paused) {
+    memGuard.manualPause = !!paused;
+  }
+
+  // Wrap an operation that needs every photo's dataUrl in memory
+  // (PDF / ZIP build, lightbox preview, etc.). The wrapper lifts the
+  // unload guard, makes sure data is loaded, runs the operation, then
+  // releases. If the page was hidden mid-operation we leave the
+  // dataUrls loaded — the next visibility-hidden event will cycle.
+  async function withPhotoDataUrls(fn) {
+    memGuard.busyCount += 1;
+    try {
+      if (memGuard.unloaded) {
+        await reloadAllPhotoDataUrls();
+        memGuard.unloaded = false;
+      }
+      return await fn();
+    } finally {
+      memGuard.busyCount = Math.max(0, memGuard.busyCount - 1);
+    }
+  }
+
+  function setupVisibilityMemoryGuard() {
+    if (typeof document === "undefined" || !("visibilityState" in document)) return;
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
+        if (memGuard.manualPause) return;
+        if (memGuard.busyCount > 0) return;
+        if (memGuard.unloaded) return;
+        // Slight delay so quick app-switches don't churn unnecessarily.
+        if (memGuard.pendingHide) clearTimeout(memGuard.pendingHide);
+        memGuard.pendingHide = setTimeout(() => {
+          memGuard.pendingHide = null;
+          if (document.visibilityState !== "hidden") return;
+          if (memGuard.busyCount > 0 || memGuard.manualPause) return;
+          unloadAllPhotoDataUrls();
+          memGuard.unloaded = true;
+        }, 250);
+      } else if (document.visibilityState === "visible") {
+        if (memGuard.pendingHide) {
+          clearTimeout(memGuard.pendingHide);
+          memGuard.pendingHide = null;
+        }
+        if (memGuard.unloaded && !memGuard.manualPause) {
+          reloadAllPhotoDataUrls()
+            .then(() => { memGuard.unloaded = false; })
+            .catch((err) => console.warn("Failed to reload dataUrls on visible", err));
+        }
+      }
+    });
+    // Treat the BFCache pageshow/persisted as a visible event for our
+    // purposes — Safari sometimes restores the page in this state
+    // without firing visibilitychange.
+    window.addEventListener("pageshow", (e) => {
+      if (e.persisted && memGuard.unloaded && !memGuard.manualPause) {
+        reloadAllPhotoDataUrls()
+          .then(() => { memGuard.unloaded = false; })
+          .catch((err) => console.warn("Failed to reload dataUrls on pageshow", err));
+      }
+    });
   }
 
   function renderOriginalsPartsDialog(plan) {
@@ -6579,6 +6667,14 @@ ${nojsFallback}
       startOriginalsExport({ share });
       return;
     }
+    // The compressed path needs every photo's dataUrl resident — wrap
+    // the heavy build so the visibility guard doesn't unload during it.
+    return withPhotoDataUrls(() => buildAndDeliverCompressedZip({ share }));
+  }
+
+  async function buildAndDeliverCompressedZip(options) {
+    const share = !!(options && options.share);
+    const compress = true;
     // iOS WebKit (and especially the standalone PWA process) gets a
     // much smaller memory ceiling than desktop Safari. Chunk size is
     // the main lever — every photo we add to a chunk holds ~2-5 MB
@@ -6758,6 +6854,13 @@ ${nojsFallback}
           ? `All ${numParts} parts ${share ? "shared" : "saved"}.`
           : `Photos ZIP ${share ? "shared" : "saved"}.`
       );
+      // Same as the PDF path: if the user is already in the receiving
+      // app (Drive / Files / etc.), free dataUrls so iOS doesn't
+      // reload the PWA when they come back.
+      if (document.visibilityState === "hidden" && !memGuard.manualPause && memGuard.busyCount === 0) {
+        unloadAllPhotoDataUrls();
+        memGuard.unloaded = true;
+      }
     } catch (err) {
       console.error(err);
       toast(err.message || "Failed to build photos ZIP.", "err");
@@ -7300,6 +7403,11 @@ ${nojsFallback}
   });
 
   wireMetaInputs();
+
+  // Activate the iOS-friendly memory guard: drop photo dataUrls on
+  // visibilitychange:hidden, re-load on visible. Keeps the resident
+  // memory low while the PWA is backgrounded so iOS doesn't reload us.
+  setupVisibilityMemoryGuard();
 
   // -------------------- Close-all FAB --------------------
   // Floating pill that appears whenever at least one accordion is open
