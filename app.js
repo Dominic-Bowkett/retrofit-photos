@@ -637,7 +637,7 @@
         accuracy: pos.coords.accuracy,
         timestamp: pos.timestamp,
       };
-      setGpsStatus("ok", `GPS on (±${Math.round(pos.coords.accuracy)}m)`);
+      setGpsStatus("ok", "GPS");
     };
     const onError = (err) => {
       setGpsStatus("err", "GPS off");

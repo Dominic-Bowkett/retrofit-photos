@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="stylesheet" href="style.css?v=36" />
+    <link rel="stylesheet" href="style.css?v=37" />
   </head>
   <body>
     <header class="app-header">
@@ -23,26 +23,32 @@
         </div>
       </div>
       <div class="header-actions">
-        <div class="property-switcher">
-          <label for="property-select" class="sr-only">Current property</label>
-          <select id="property-select" aria-label="Current property"></select>
-          <button id="btn-new-property" class="btn btn-ghost" type="button" title="New property">+ New</button>
+        <div class="header-row header-row-utility">
+          <div class="property-switcher">
+            <label for="property-select" class="sr-only">Current property</label>
+            <select id="property-select" aria-label="Current property"></select>
+            <button id="btn-new-property" class="btn btn-ghost" type="button" title="New property">+ New</button>
+          </div>
+          <div class="header-icon-buttons">
+            <button id="btn-enable-gps" class="btn btn-ghost btn-icon" type="button" title="GPS">
+              <span class="dot" id="gps-dot"></span>
+              <span id="gps-label">GPS</span>
+            </button>
+            <button id="btn-refresh" class="btn btn-ghost btn-icon" type="button" title="Reload the app" aria-label="Reload the app">
+              <span aria-hidden="true">↻</span>
+            </button>
+            <button id="btn-settings" class="btn btn-ghost btn-icon" type="button" title="Settings" aria-label="Settings">
+              <span aria-hidden="true">⚙</span>
+            </button>
+            <button id="btn-autolabel" class="btn btn-ghost btn-icon" type="button" title="Auto-label &amp; tag photos with AI" aria-label="Auto-label and tag photos with AI">
+              <span aria-hidden="true">✨</span>
+            </button>
+          </div>
         </div>
-        <button id="btn-enable-gps" class="btn btn-ghost" type="button">
-          <span class="dot" id="gps-dot"></span>
-          <span id="gps-label">Enable GPS</span>
-        </button>
-        <button id="btn-refresh" class="btn btn-ghost" type="button" title="Reload the app" aria-label="Reload the app">
-          <span aria-hidden="true">↻</span>
-        </button>
-        <button id="btn-settings" class="btn btn-ghost" type="button" title="Settings" aria-label="Settings">
-          <span aria-hidden="true">⚙</span>
-        </button>
-        <button id="btn-autolabel" class="btn btn-ghost" type="button" title="Auto-label photos with AI" aria-label="Auto-label photos with AI">
-          <span aria-hidden="true">✨</span>
-        </button>
-        <button id="btn-export-photos" class="btn" type="button" disabled>Export photos</button>
-        <button id="btn-export" class="btn btn-primary" type="button" disabled>Download PDF</button>
+        <div class="header-row header-row-export">
+          <button id="btn-export-photos" class="btn" type="button" disabled>Export photos</button>
+          <button id="btn-export" class="btn btn-primary" type="button" disabled>Download PDF</button>
+        </div>
       </div>
     </header>
 
@@ -350,6 +356,12 @@
           </button>
           <button type="button" class="room-windows-remove" aria-label="Remove this window">✕</button>
         </legend>
+        <div class="room-windows-photo-row">
+          <button type="button" class="btn btn-primary-soft btn-window-photo" title="Take a photo of this window — orientation is captured from the phone's compass at shutter time">
+            <span aria-hidden="true">📷</span>
+            <span>Window Photo (auto orientation)</span>
+          </button>
+        </div>
         <div class="room-windows-row">
           <label class="room-windows-field">
             <span class="room-windows-label">Type</span>
@@ -393,12 +405,6 @@
           <button type="button" class="btn btn-primary-soft btn-capture-laser" title="Take a photo of the laser measurer's screen — width = longest reading, height = shortest">
             <span aria-hidden="true">📷</span>
             <span>Capture from laser</span>
-          </button>
-        </div>
-        <div class="room-windows-photo-row">
-          <button type="button" class="btn btn-primary-soft btn-window-photo" title="Take a photo of this window — orientation is captured from the phone's compass at shutter time">
-            <span aria-hidden="true">📷</span>
-            <span>Window Photo (auto orientation)</span>
           </button>
         </div>
       </fieldset>
@@ -662,6 +668,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
-    <script src="app.js?v=36"></script>
+    <script src="app.js?v=37"></script>
   </body>
 </html>

@@ -87,10 +87,72 @@ html {
 
 .header-actions {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.header-row {
+  display: flex;
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.header-row-utility .property-switcher {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.header-icon-buttons {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.header-row-export {
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+
+.header-row-export .btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-icon {
+  width: 38px;
+  padding: 7px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+#btn-enable-gps.btn-icon {
+  width: auto;
+  padding: 7px 10px;
+  gap: 6px;
+}
+
+@media (min-width: 720px) {
+  .header-actions {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .header-row-export {
+    flex: 0 0 auto;
+  }
+  .header-row-export .btn {
+    flex: 0 0 auto;
+  }
 }
 
 .container {
@@ -190,11 +252,16 @@ input[type="date"]:focus {
 .btn-ghost {
   --btn-bg: transparent;
   --btn-ink: #fff;
-  border-color: rgba(255, 255, 255, 0.35);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .app-header .btn-ghost:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.app-header .btn-icon {
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .btn-ghost-dark {
