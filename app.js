@@ -4590,17 +4590,36 @@
 
   // Walk every photo in the current property and optionally re-label it
   // via Claude. scope:"unlabelled" skips photos that already have a
-  // user-provided label; scope:"all" overwrites existing labels. Both
-  // save per-photo and re-render the groups view at the end.
+  // user-provided label. scope:"default-or-empty" also targets photos
+  // whose label is the auto-generated default ("Bedroom 1 — 3" etc.)
+  // since those carry no real information. scope:"all" overwrites
+  // every label. All three save per-photo and re-render at the end.
   async function runBulkLabel(opts) {
-    const scope = opts && opts.scope === "all" ? "all" : "unlabelled";
+    const validScopes = new Set(["unlabelled", "default-or-empty", "all"]);
+    const scope = opts && validScopes.has(opts.scope) ? opts.scope : "default-or-empty";
     const hasLabel = (p) => !!(p && p.label && p.label.trim());
+    const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // The default label format used by commitBufferedPhotos /
+    // addUploadedPhotos is `${group.name} — ${index}` where
+    // group.name is room.name for rooms and the flat group's name
+    // for flat groups.
+    const isDefaultLabel = (p, baseName) => {
+      if (!hasLabel(p) || !baseName) return false;
+      return new RegExp(`^${escapeRe(baseName)} — \\d+$`).test(p.label.trim());
+    };
+    const skip = (photo, baseName) => {
+      if (scope === "all") return false;
+      if (scope === "unlabelled") return hasLabel(photo);
+      // "default-or-empty": skip only when the label is real (i.e.
+      // not blank and not the auto-generated default pattern).
+      return hasLabel(photo) && !isDefaultLabel(photo, baseName);
+    };
     const targets = [];
     for (const g of state.property.groups || []) {
       for (const pid of g.photoIds || []) {
         const photo = state.photos.get(pid);
         if (!photo) continue;
-        if (scope === "unlabelled" && hasLabel(photo)) continue;
+        if (skip(photo, g.name)) continue;
         targets.push({ photo, sourceName: g.name });
       }
     }
@@ -4608,7 +4627,7 @@
       for (const pid of room.photoIds || []) {
         const photo = state.photos.get(pid);
         if (!photo) continue;
-        if (scope === "unlabelled" && hasLabel(photo)) continue;
+        if (skip(photo, room.name)) continue;
         targets.push({
           photo,
           sourceName: `${room.name} (${room.habitability})`,
