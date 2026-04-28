@@ -408,6 +408,15 @@
       async putPhoto(photo) {
         return req(STORE_PHOTOS, "readwrite", (s) => s.put(photo));
       },
+      async getPhoto(id) {
+        return req(STORE_PHOTOS, "readonly", (s) => {
+          return new Promise((resolve, reject) => {
+            const r = s.get(id);
+            r.onsuccess = () => resolve(r.result || null);
+            r.onerror = () => reject(r.error);
+          });
+        });
+      },
       async deletePhoto(id) {
         return req(STORE_PHOTOS, "readwrite", (s) => s.delete(id));
       },
@@ -6325,8 +6334,17 @@ ${nojsFallback}
     const groupIndexCounter = new Map();
     let processed = 0;
     for (const pid of partIds) {
-      const photo = state.photos.get(pid);
-      if (!photo || isLaserCapturePhoto(photo)) continue;
+      // Read each photo straight from IDB — by this point the parts
+      // dialog has dropped state.photos.dataUrl to keep iOS PWA
+      // resident memory low. We only hold one photo's dataUrl at a
+      // time, hand the bytes to JSZip, then null it.
+      let photo;
+      try {
+        photo = await IDB.getPhoto(pid);
+      } catch (err) {
+        console.warn("Failed to read photo from IDB", pid, err);
+      }
+      if (!photo || !photo.dataUrl || isLaserCapturePhoto(photo)) continue;
       const owner = ownerOf(pid);
       if (!owner) continue;
       const { group, room } = owner;
@@ -6354,6 +6372,9 @@ ${nojsFallback}
       const name = `${defectPrefix}${tagPrefix}${String(indexInGroup).padStart(2, "0")}_${labelSlug}.jpg`;
       folder.file(name, bytes, { date: new Date(stamp) });
       bytes = null;
+      // Drop our local copy of the photo blob too — JSZip already has
+      // its own reference to the bytes.
+      photo = null;
       processed += 1;
       if (processed % 4 === 0 || processed === partIds.length) {
         toast(`Packaging photos${partLabel}… ${processed}/${partIds.length}`);
@@ -6394,6 +6415,11 @@ ${nojsFallback}
 
   function openOriginalsPartsDialog(plan) {
     if (!els.originalsPartsDialog) return;
+    // While the dialog is open, keep memory pressure low so iOS won't
+    // reload the PWA when the user returns from saving a part to
+    // Drive / Files / Dropbox. Each part's saveOriginalsPart re-reads
+    // from IDB on demand, so state.photos can hold metadata only.
+    unloadAllPhotoDataUrls();
     renderOriginalsPartsDialog(plan);
     els.originalsPartsDialog.hidden = false;
     els.originalsPartsDialog.setAttribute("aria-hidden", "false");
@@ -6402,6 +6428,51 @@ ${nojsFallback}
     if (!els.originalsPartsDialog) return;
     els.originalsPartsDialog.hidden = true;
     els.originalsPartsDialog.setAttribute("aria-hidden", "true");
+    // Restore in-memory dataUrls so thumbs come back to life.
+    reloadAllPhotoDataUrls().catch((err) => {
+      console.warn("Failed to reload photo dataUrls", err);
+    });
+  }
+
+  // Drop dataUrls from state.photos to slash the PWA's resident memory
+  // (each photo is a few MB; a 100-photo property is ~300-500 MB on
+  // its own). Photos still exist in IndexedDB, so the export path can
+  // read them back on demand.
+  function unloadAllPhotoDataUrls() {
+    for (const photo of state.photos.values()) {
+      if (photo && photo.dataUrl) photo.dataUrl = null;
+    }
+    // Hide thumbs that have lost their src so we don't show broken
+    // images while the dialog is open.
+    document.querySelectorAll(".thumb img").forEach((img) => {
+      img.removeAttribute("src");
+    });
+  }
+
+  // Pull dataUrls back into state.photos from IDB so the rest of the
+  // app keeps working after the parts dialog closes.
+  async function reloadAllPhotoDataUrls() {
+    if (!state.property) return;
+    const ids = new Set();
+    for (const g of state.property.groups || []) {
+      for (const pid of g.photoIds || []) ids.add(pid);
+    }
+    for (const r of state.property.rooms || []) {
+      for (const pid of r.photoIds || []) ids.add(pid);
+    }
+    for (const id of ids) {
+      const photo = state.photos.get(id);
+      if (!photo || photo.dataUrl) continue;
+      try {
+        const fresh = await IDB.getPhoto(id);
+        if (fresh && fresh.dataUrl) photo.dataUrl = fresh.dataUrl;
+      } catch (err) {
+        console.warn("Failed to re-load photo", id, err);
+      }
+    }
+    // Re-render so the now-restored thumbs appear again.
+    if (typeof renderRooms === "function") renderRooms();
+    if (typeof renderGroups === "function") renderGroups();
   }
 
   function renderOriginalsPartsDialog(plan) {
