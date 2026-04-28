@@ -184,22 +184,10 @@
     auto_tag: {
       type: "object",
       properties: {
-        tag: {
-          type: ["string", "null"],
-          enum: [
-            "Room",
-            "Undercuts",
-            "Windows",
-            "Lighting",
-            "Heating",
-            "Secondary Heating",
-            "Ventilation",
-            "Renewables",
-            "Meters",
-            "Other",
-            null,
-          ],
-        },
+        // Free-form nullable string — the client validates the value
+        // against ROOM_TAGS so we don't need an enum here, which
+        // avoids JSON-schema quirks around mixing enum with null.
+        tag: { type: ["string", "null"] },
         reason: { type: "string" },
         confidence: { type: "string", enum: ["high", "medium", "low"] },
       },
@@ -4776,6 +4764,7 @@
     let tagged = 0;
     let failed = 0;
     let cancelled = false;
+    let firstErr = null;
     for (const photo of targets) {
       if (bulkLabelState.cancelRequested) { cancelled = true; break; }
       processed += 1;
@@ -4796,6 +4785,7 @@
         }
       } catch (err) {
         failed += 1;
+        if (!firstErr) firstErr = err;
         console.warn("Auto-tag failed for photo", photo.id, err);
       }
       await new Promise((r) => setTimeout(r, 30));
@@ -4807,6 +4797,10 @@
     renderGroups();
     if (cancelled) {
       toast(`Cancelled. Tagged ${tagged}/${targets.length} so far.`);
+    } else if (failed === targets.length && firstErr) {
+      // Every photo failed — surface the actual error so we don't
+      // hide a misconfigured API key / schema rejection / etc.
+      toast(firstErr.message || "Auto-tag failed.", "err");
     } else {
       toast(
         failed
