@@ -1801,6 +1801,60 @@ input[type="date"]:focus {
   transform: rotate(-90deg);
 }
 
+/* ---------- Big right-side accordion toggle ---------- */
+.room-header,
+.group-header {
+  position: relative;
+  /* Reserve space on the right so the absolutely-positioned toggle
+     never overlaps the title or the action buttons. */
+  padding-right: 56px;
+}
+
+.accordion-toggle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--accent-softer);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-ink);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  z-index: 1;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.accordion-toggle:hover {
+  background: var(--accent-soft);
+}
+
+.accordion-toggle:active {
+  transform: scale(0.94);
+}
+
+.accordion-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.accordion-toggle-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+  display: inline-block;
+  transition: transform 0.18s ease;
+}
+
+.room.collapsed .accordion-toggle-icon,
+.group.collapsed .accordion-toggle-icon {
+  transform: rotate(-90deg);
+}
+
 .room-title-wrap {
   display: flex;
   align-items: baseline;

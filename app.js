@@ -1819,6 +1819,10 @@
     if (!expanded) node.classList.add("collapsed");
     header.setAttribute("aria-expanded", String(expanded));
     header.addEventListener("click", (e) => {
+      if (e.target.closest(".accordion-toggle")) {
+        toggleGroup(section, node);
+        return;
+      }
       if (e.target.closest("button, input, [contenteditable='true']")) return;
       toggleGroup(section, node);
     });
@@ -1911,6 +1915,10 @@
     if (!expanded) node.classList.add("collapsed");
     header.setAttribute("aria-expanded", String(expanded));
     header.addEventListener("click", (e) => {
+      if (e.target.closest(".accordion-toggle")) {
+        toggleGroup(synthetic, node);
+        return;
+      }
       if (e.target.closest("button, input, [contenteditable='true']")) return;
       toggleGroup(synthetic, node);
     });
@@ -1991,6 +1999,10 @@
     if (!expanded) node.classList.add("collapsed");
     header.setAttribute("aria-expanded", String(expanded));
     header.addEventListener("click", (e) => {
+      if (e.target.closest(".accordion-toggle")) {
+        toggleGroup(group, node);
+        return;
+      }
       if (e.target.closest("button, input, [contenteditable='true']")) return;
       toggleGroup(group, node);
     });
@@ -2524,6 +2536,13 @@
     if (!expanded) node.classList.add("collapsed");
     header.setAttribute("aria-expanded", String(expanded));
     header.addEventListener("click", (e) => {
+      // Tap on a button / input / select inside the header runs that
+      // control's own handler, EXCEPT the dedicated accordion-toggle
+      // button which is exactly meant to fold the row.
+      if (e.target.closest(".accordion-toggle")) {
+        toggleRoom(room, node);
+        return;
+      }
       if (e.target.closest("button, input, select, [contenteditable='true']")) return;
       toggleRoom(room, node);
     });

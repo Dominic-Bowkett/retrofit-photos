@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="stylesheet" href="style.css?v=38" />
+    <link rel="stylesheet" href="style.css?v=39" />
   </head>
   <body>
     <header class="app-header">
@@ -176,7 +176,6 @@
       <article class="card group" data-group-id="">
         <header class="group-header" role="button" tabindex="0" aria-expanded="true">
           <div class="group-title-wrap">
-            <span class="group-chevron" aria-hidden="true">▾</span>
             <h2 class="group-title" contenteditable="true" spellcheck="false"></h2>
             <span class="group-count">0 photos</span>
           </div>
@@ -188,6 +187,9 @@
             </label>
             <button class="btn btn-ghost-dark btn-remove-group" type="button" title="Remove group">Remove</button>
           </div>
+          <button type="button" class="accordion-toggle accordion-toggle-group" aria-label="Open or close this group">
+            <span class="accordion-toggle-icon" aria-hidden="true">▾</span>
+          </button>
         </header>
         <div class="thumbs">
           <button type="button" class="thumb thumb-add btn-take-photo-tile" title="Take another photo">
@@ -234,7 +236,6 @@
       <article class="card room" data-room-id="">
         <header class="room-header" role="button" tabindex="0" aria-expanded="true">
           <div class="room-title-wrap">
-            <span class="group-chevron" aria-hidden="true">▾</span>
             <input type="text" class="room-title-input" aria-label="Room name" placeholder="Room name" spellcheck="false" />
             <span class="room-photo-count">0 photos</span>
           </div>
@@ -258,6 +259,9 @@
             </label>
             <button class="btn btn-ghost-dark btn-remove-room" type="button" title="Remove room">Remove</button>
           </div>
+          <button type="button" class="accordion-toggle accordion-toggle-room" aria-label="Open or close this room">
+            <span class="accordion-toggle-icon" aria-hidden="true">▾</span>
+          </button>
         </header>
         <div class="room-body">
           <fieldset class="room-counts" aria-label="Lighting count">
@@ -668,6 +672,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
-    <script src="app.js?v=38"></script>
+    <script src="app.js?v=39"></script>
   </body>
 </html>
