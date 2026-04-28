@@ -6267,7 +6267,7 @@ ${nojsFallback}
       ("standalone" in navigator && navigator.standalone === true) ||
       (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
     const isIOSPwa = isIOS && isStandalone;
-    const ORIGINALS_CHUNK = isIOSPwa ? 25 : isIOS ? 50 : 100;
+    const ORIGINALS_CHUNK = 100;
 
     const photoIds = [];
     for (const g of state.property.groups || []) {
@@ -6685,7 +6685,7 @@ ${nojsFallback}
       ("standalone" in navigator && navigator.standalone === true) ||
       (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
     const isIOSPwa = isIOS && isStandalone;
-    const ORIGINALS_CHUNK = isIOSPwa ? 25 : isIOS ? 50 : 100;
+    const ORIGINALS_CHUNK = 100;
     const interPartPauseMs = isIOSPwa ? 2200 : isIOS ? 1500 : 800;
     if (typeof JSZip === "undefined") {
       toast("ZIP library failed to load.", "err");
