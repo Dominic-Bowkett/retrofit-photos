@@ -90,25 +90,43 @@ html {
   flex-direction: column;
   gap: 8px;
   align-items: stretch;
+  width: 100%;
 }
 
-.header-row {
+.header-row-utility {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  align-items: stretch;
 }
 
 .header-row-utility .property-switcher {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.header-row-utility .property-switcher select {
   flex: 1 1 auto;
   min-width: 0;
+  max-width: none;
+}
+
+.header-row-utility .property-switcher .btn {
+  flex: 0 0 auto;
 }
 
 .header-icon-buttons {
   display: flex;
   gap: 6px;
-  flex: 0 0 auto;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.header-icon-buttons .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
 }
 
 .header-row-export {
@@ -116,28 +134,29 @@ html {
   gap: 8px;
   flex-wrap: nowrap;
   justify-content: flex-end;
+  width: 100%;
 }
 
 .header-row-export .btn {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  justify-content: center;
 }
 
 .btn-icon {
-  width: 38px;
-  padding: 7px 6px;
+  width: auto;
+  padding: 8px 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
 }
 
 #btn-enable-gps.btn-icon {
   width: auto;
-  padding: 7px 10px;
+  padding: 8px 10px;
   gap: 6px;
 }
 
@@ -146,9 +165,29 @@ html {
     flex-direction: row;
     align-items: center;
     justify-content: flex-end;
+    width: auto;
+  }
+  .header-row-utility {
+    flex-direction: row;
+    align-items: center;
+    flex: 0 0 auto;
+  }
+  .header-row-utility .property-switcher {
+    width: auto;
+  }
+  .header-row-utility .property-switcher select {
+    max-width: 220px;
+  }
+  .header-icon-buttons {
+    width: auto;
+    justify-content: flex-start;
+  }
+  .header-icon-buttons .btn {
+    flex: 0 0 auto;
   }
   .header-row-export {
     flex: 0 0 auto;
+    width: auto;
   }
   .header-row-export .btn {
     flex: 0 0 auto;
