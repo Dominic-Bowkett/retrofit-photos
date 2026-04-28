@@ -4639,6 +4639,14 @@
   // since those carry no real information. scope:"all" overwrites
   // every label. All three save per-photo and re-render at the end.
   async function runBulkLabel(opts) {
+    if (!getClaudeApiKey()) {
+      toast("Set a Claude API key in Settings first.", "err");
+      return { processed: 0, failed: 0 };
+    }
+    return withPhotoDataUrls(() => runBulkLabelImpl(opts));
+  }
+
+  async function runBulkLabelImpl(opts) {
     const validScopes = new Set(["unlabelled", "default-or-empty", "all"]);
     const scope = opts && validScopes.has(opts.scope) ? opts.scope : "default-or-empty";
     const hasLabel = (p) => !!(p && p.label && p.label.trim());
@@ -4731,6 +4739,14 @@
   // banner + cancel UX, but uses the auto_tag preset and writes to
   // photo.roomTag instead of photo.label.
   async function runBulkTag(opts) {
+    if (!getClaudeApiKey()) {
+      toast("Set a Claude API key in Settings first.", "err");
+      return { processed: 0, tagged: 0, failed: 0 };
+    }
+    return withPhotoDataUrls(() => runBulkTagImpl(opts));
+  }
+
+  async function runBulkTagImpl(opts) {
     const scope = opts && opts.scope === "all" ? "all" : "untagged";
     const targets = [];
     for (const g of state.property.groups || []) {
