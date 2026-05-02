@@ -9,8 +9,7 @@ containing the PDF plus every stamped JPEG with EXIF metadata.
 No server, no build step — it's three static files (`index.html`, `style.css`,
 `app.js`) plus three CDN libraries (jsPDF, JSZip, piexifjs).
 
-Live demo via GitHub Pages: [<https://github.com/Dominic-Bowkett/retrofit-photos](https://dominic-bowkett.github.io/retrofit-photos/>
-](https://dominic-bowkett.github.io/retrofit-photos/)
+Live demo via GitHub Pages: 
 ## What it does
 
 ### Capture
