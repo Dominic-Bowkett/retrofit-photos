@@ -16,17 +16,17 @@
   // into photo tags. On load we move their photos into External Elevations
   // and stamp each photo with the mapped tag so the information survives.
   const LEGACY_GROUP_TO_TAG = {
-    "meters": "Meters",
-    "windows": "Windows",
-    "doors": "Other",
-    "conservatory": "Other",
+    "meters": "Electricity Meter",
+    "windows": "Openings",
+    "doors": "Openings",
+    "conservatory": "Conservatory",
     "renewables": "Renewables",
-    "mains heating": "Heating",
-    "secondary heating": "Secondary Heating",
-    "water heating": "Heating",
+    "mains heating": "Primary Heating System",
+    "secondary heating": "Secondary Heating System",
+    "water heating": "Hot Water Cylinder",
     "ventilation": "Ventilation",
-    "lighting": "Lighting",
-    "walls": "Other",
+    "lighting": "Light Fittings",
+    "walls": "Wall Construction",
     "floor": "Other",
   };
 
@@ -78,16 +78,42 @@
   // can carry one of these tags (or none).
   const ROOM_TAGS = [
     "Room",
+    "Openings",
     "Undercuts",
-    "Windows",
-    "Lighting",
-    "Heating",
-    "Secondary Heating",
+    "Light Fittings",
     "Ventilation",
+    "Primary Heating System",
+    "Secondary Heating System",
+    "Heating System Controls",
+    "Heating Fuel",
+    "Hot Water Cylinder",
+    "Electricity Meter",
+    "Gas Meter",
     "Renewables",
-    "Meters",
+    "Wall Construction",
+    "Roof Construction",
+    "Loft Space Access",
+    "Loft Insulation",
+    "Roof Rooms",
+    "Corridor / Stairwell",
+    "Shower / Bath",
+    "Conservatory",
+    "Floorplan",
+    "Additional Evidence",
     "Other",
   ];
+
+  // Legacy tag values from older builds → current tag list. Applied
+  // on property load so existing photos pick up the renames.
+  const LEGACY_TAG_RENAMES = {
+    "Windows": "Openings",
+    "Lighting": "Light Fittings",
+    "Heating": "Primary Heating System",
+    "Secondary Heating": "Secondary Heating System",
+    // "Meters" is ambiguous — best-guess to Electricity Meter; the
+    // user can re-tag the gas ones via the dropdown / bulk auto-tag.
+    "Meters": "Electricity Meter",
+  };
   const NO_ROOM_TAG = "";
 
   // -------------------- AI photo analysis (Claude API) --------------------
@@ -268,18 +294,30 @@
       systemPrompt:
         "You are a Domestic Energy Assessor's assistant tagging photos in a UK retrofit survey.\n\n" +
         "Pick the SINGLE best tag for the photo from this fixed list:\n" +
-        "- Room — general view of a room or its empty walls.\n" +
-        "- Undercuts — gaps below an internal door (door + floor visible).\n" +
-        "- Windows — close-up of a window: frame, glass, sash, sill, or a clear shot of one whole window.\n" +
-        "- Lighting — light fittings, bulbs, lamps, light switches.\n" +
-        "- Heating — radiators, central heating boilers, hot water cylinders, thermostats, heating programmers / timers, " +
-        "underfloor heating manifolds.\n" +
-        "- Secondary Heating — fireplaces, wood-burning stoves, plug-in electric heaters used as supplementary heat.\n" +
-        "- Ventilation — extractor fans, MVHR / MEV units, air bricks, dedicated trickle / core / IEV / DMEV vents " +
-        "(close-up of the vent itself, not just a window).\n" +
-        "- Renewables — solar PV / thermal panels, battery storage, heat-pump indoor or outdoor units, EV chargers.\n" +
-        "- Meters — electricity meter, gas meter, smart meter In-Home Display.\n" +
-        "- Other — anything else (general construction, walls, ceilings, junction boxes, exterior shots that don't fit).\n\n" +
+        "- Room — general / wide view of a room or its empty walls.\n" +
+        "- Openings — windows AND doors (frame, glass, sash, sill; or a door from inside / outside). Use this for both.\n" +
+        "- Undercuts — the gap measured below an internal door (door + floor visible, often with a tape / spacer).\n" +
+        "- Light Fittings — light fittings, bulbs, lamps, light switches.\n" +
+        "- Ventilation — extractor fans, MVHR / MEV units, air bricks, trickle / core / IEV / DMEV vents (close-up of the vent itself).\n" +
+        "- Primary Heating System — central-heating boiler, heat-pump indoor unit, electric storage heater, the main heat source.\n" +
+        "- Secondary Heating System — fireplace, wood-burning stove, plug-in electric heater used as supplementary heat.\n" +
+        "- Heating System Controls — thermostat, programmer, timer, room stat, zone valves, weather compensator.\n" +
+        "- Heating Fuel — fuel sources: gas service entry, oil tank, LPG bottles, solid-fuel hopper, pellet store.\n" +
+        "- Hot Water Cylinder — hot-water tank / cylinder, immersion heater, unvented vessel.\n" +
+        "- Electricity Meter — electricity meter (smart or analogue) / In-Home Display.\n" +
+        "- Gas Meter — gas meter (smart or analogue).\n" +
+        "- Renewables — solar PV / thermal panels, battery storage, EV chargers, heat-pump outdoor unit.\n" +
+        "- Wall Construction — close-up of wall fabric: exposed brick / block / cavity / studwork / wall insulation.\n" +
+        "- Roof Construction — roof structure: rafters, sarking, breather membrane, tile / slate underside.\n" +
+        "- Loft Space Access — loft hatches, pull-down ladders, attic access points.\n" +
+        "- Loft Insulation — insulation in the loft (mineral wool, foil, foam, etc.).\n" +
+        "- Roof Rooms — habitable rooms within the roof, dormer interiors, sloping ceilings.\n" +
+        "- Corridor / Stairwell — corridors, halls, stairwells.\n" +
+        "- Shower / Bath — shower cubicles, bath enclosures, wet-room finishes.\n" +
+        "- Conservatory — a conservatory.\n" +
+        "- Floorplan — printed or sketched floor plans / drawings.\n" +
+        "- Additional Evidence — supporting evidence that doesn't slot neatly into the above (paperwork, plates, certificates).\n" +
+        "- Other — genuinely unclassifiable.\n\n" +
         "Return tag = null if you genuinely cannot tell. Don't guess wildly — if you're not at least medium-confident, " +
         "prefer null. confidence: high only when the subject is unambiguous and dominates the frame. " +
         "Keep reason to one short sentence describing what you see.",
@@ -1404,6 +1442,28 @@
     return false;
   }
 
+  // Walk every photo and rename any roomTag values that have been
+  // renamed in the current ROOM_TAGS list (Windows → Openings,
+  // Heating → Primary Heating System, etc.). Persists each updated
+  // photo. Called once per property load.
+  function migrateRoomTags() {
+    const rename = (tag) => {
+      if (!tag) return tag;
+      if (Object.prototype.hasOwnProperty.call(LEGACY_TAG_RENAMES, tag)) {
+        return LEGACY_TAG_RENAMES[tag];
+      }
+      return tag;
+    };
+    for (const photo of state.photos.values()) {
+      if (!photo) continue;
+      const next = rename(photo.roomTag);
+      if (next !== photo.roomTag) {
+        photo.roomTag = next;
+        savePhotoNow(photo).catch((err) => console.warn("Failed to migrate roomTag for photo", photo.id, err));
+      }
+    }
+  }
+
   // Older builds saved laser captures as room photos with a
   // laserCapture flag and excluded them from exports. The current
   // build doesn't persist them at all, so on load we delete any that
@@ -1518,6 +1578,11 @@
 
     // Drop any laser-capture photos that older builds left in the room.
     cleanupLegacyLaserCaptures();
+
+    // Rename old roomTag values (Windows → Openings, Heating →
+    // Primary Heating System, etc.) so they match the current tag
+    // list. Persists each renamed photo.
+    migrateRoomTags();
 
     initExpandedForProperty();
     renderMeta();
