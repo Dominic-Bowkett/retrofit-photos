@@ -772,7 +772,9 @@
     ctx.closePath();
   }
 
-  function drawOverlay(ctx, width, height, dateText, gpsText) {
+  function drawOverlay(ctx, width, height, dateText, gpsText, extraLines) {
+    const extras = Array.isArray(extraLines) ? extraLines.filter((s) => !!s) : [];
+    const lines = [dateText, gpsText, ...extras];
     const pad = Math.round(Math.min(width, height) * 0.015);
     const fontPx = Math.max(14, Math.round(Math.min(width, height) * 0.028));
     ctx.font = `600 ${fontPx}px -apple-system, Roboto, "Segoe UI", Arial, sans-serif`;
@@ -780,7 +782,6 @@
     ctx.textAlign = "right";
 
     const lineGap = Math.round(fontPx * 0.35);
-    const lines = [dateText, gpsText];
     const metrics = lines.map((l) => ctx.measureText(l));
     const maxWidth = Math.max(...metrics.map((m) => m.width));
     const boxH = lines.length * fontPx + (lines.length - 1) * lineGap + pad * 2;
@@ -3741,6 +3742,16 @@
     torchOn: false,
   };
 
+  // True for the External Elevations flat group. Used so each
+  // captured frame can be stamped with the building-face orientation
+  // (the opposite of the phone's compass heading — when you stand
+  // back from the building and point the camera at the wall, the wall
+  // faces away from you).
+  function isExternalElevationGroup(group) {
+    if (!group || !group.name) return false;
+    return /^\s*external\s+elevations?\s*$/i.test(group.name);
+  }
+
   async function openCamera(group) {
     camera.group = group;
     camera.buffer = [];
@@ -3749,6 +3760,14 @@
     renderCameraBuffer();
     camera.els.overlay.hidden = false;
     camera.els.overlay.setAttribute("aria-hidden", "false");
+    // Kick off the compass watcher inside the user-gesture frame so
+    // iOS Safari accepts DeviceOrientationEvent.requestPermission().
+    // Window-photo / laser captures already call this themselves; for
+    // External Elevations we start it here so a regular Take Photo
+    // tap also gets the heading.
+    if (isExternalElevationGroup(group)) {
+      startCompassWatch().catch((err) => console.warn("compass start failed", err));
+    }
     try {
       await startCameraStream(camera.facingMode);
     } catch (err) {
@@ -3941,7 +3960,27 @@
     const ctx = canvas.getContext("2d");
     ctx.drawImage(video, 0, 0, outW, outH);
     const stampDate = new Date();
-    drawOverlay(ctx, outW, outH, formatStamp(stampDate), formatGps(state.gps));
+
+    // External Elevations: read the latest compass heading (set by
+    // the watcher started in openCamera) and convert it to a
+    // building-face direction. The wall the user is photographing
+    // faces the OPPOSITE way to where the camera is pointing — so a
+    // phone heading of 0° (North) means the wall is the south
+    // elevation (facing south). Snap to the nearest of the eight
+    // compass points.
+    let elevationOrientation = null;
+    let elevationHeading = null;
+    if (
+      isExternalElevationGroup(camera.group) &&
+      compassWatch.active &&
+      Number.isFinite(compassWatch.heading)
+    ) {
+      elevationHeading = compassWatch.heading;
+      const buildingFace = (elevationHeading + 180) % 360;
+      elevationOrientation = compassHeadingToOrientation(buildingFace);
+    }
+    const overlayExtras = elevationOrientation ? [`${elevationOrientation} Elevation`] : [];
+    drawOverlay(ctx, outW, outH, formatStamp(stampDate), formatGps(state.gps), overlayExtras);
     const dataUrl = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
     const photo = {
       id: uid("p"),
@@ -3956,6 +3995,10 @@
       roomTag: NO_ROOM_TAG,
       label: "",
     };
+    if (elevationOrientation) {
+      photo.elevationOrientation = elevationOrientation;
+      photo.elevationHeading = Math.round(elevationHeading);
+    }
     camera.buffer.push(photo);
     flashScreen();
     renderCameraBuffer();
